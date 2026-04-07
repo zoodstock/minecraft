@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Minecraft Alpha</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Crosshair -->
+    <div id="crosshair"></div>
+
+    <!-- Info -->
+    <div id="info" style="display:none;">
+        <div id="fps">FPS: 0</div>
+        <div id="coords">X: 0 Y: 0 Z: 0</div>
+    </div>
+
+    <!-- Selected block name -->
+    <div id="selected-block" style="display:none;">Grass</div>
+
+    <!-- Hotbar -->
+    <div id="hud" style="display:none;"></div>
+
+    <!-- Start screen -->
+    <div id="start-screen">
+        <h1>MINECRAFT</h1>
+        <p>Alpha Edition</p>
+        <button class="start-btn" id="start-btn">Play</button>
+        <div class="controls-info">
+            <strong>PC:</strong> WASD - Move | Mouse - Look | Space - Jump<br>
+            Left Click - Break | Right Click - Place | 1~7 - Select Block<br><br>
+            <strong>Mobile:</strong> Left Stick - Move | Right Stick - Look<br>
+            Break/Place Buttons | Jump Button
+        </div>
+    </div>
+
+    <!-- Mobile joysticks -->
+    <div class="joystick-container" id="joystick-move">
+        <div class="joystick-inner"></div>
+        <div class="joystick-label">MOVE</div>
+    </div>
+    <div class="joystick-container" id="joystick-look">
+        <div class="joystick-inner"></div>
+        <div class="joystick-label">LOOK</div>
+    </div>
+
+    <!-- Mobile action buttons -->
+    <div class="mobile-buttons">
+        <button class="action-btn" id="btn-break">BREAK</button>
+        <button class="action-btn" id="btn-place">PLACE</button>
+    </div>
+    <button class="action-btn" id="btn-jump">JUMP</button>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
