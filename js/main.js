@@ -3,6 +3,7 @@ import { World } from './world.js';
 import { Player } from './player.js';
 import { InputHandler } from './input.js';
 import { createBlockTextures, createBlockMaterials, BlockType, BLOCK_NAMES, PLACEABLE_BLOCKS } from './blocks.js';
+import { EntityManager } from './entities.js';
 
 // ---- 설정 ----
 const canvas = document.getElementById('game-canvas');
@@ -45,12 +46,22 @@ const world = new World(scene, materials, 42);
 
 world.update(0, 0);
 
+// ---- 엔티티 매니저 ----
+const entityManager = new EntityManager(scene, world);
+
 // ---- 플레이어 ----
 const player = new Player(camera, world);
 const input = new InputHandler(canvas);
 
-// ---- 한글 블록 이름 ----
-const BLOCK_NAMES_KO = {
+// ---- 핫바 아이템 정의 (블록 + 생성알) ----
+const SPAWN_EGG_CLIONE = 'spawn_clione';
+
+const HOTBAR_ITEMS = [
+    ...PLACEABLE_BLOCKS,
+    SPAWN_EGG_CLIONE,
+];
+
+const ITEM_NAMES_KO = {
     [BlockType.GRASS]: '잔디',
     [BlockType.DIRT]: '흙',
     [BlockType.STONE]: '돌',
@@ -58,6 +69,18 @@ const BLOCK_NAMES_KO = {
     [BlockType.LEAVES]: '나뭇잎',
     [BlockType.SAND]: '모래',
     [BlockType.WATER]: '물',
+    [SPAWN_EGG_CLIONE]: '클리오네 생성알',
+};
+
+const ITEM_COLORS = {
+    [BlockType.GRASS]: '#4c9900',
+    [BlockType.DIRT]: '#8b5a2b',
+    [BlockType.STONE]: '#808080',
+    [BlockType.WOOD]: '#654321',
+    [BlockType.LEAVES]: '#228b22',
+    [BlockType.SAND]: '#d2b48c',
+    [BlockType.WATER]: '#1e90ff',
+    [SPAWN_EGG_CLIONE]: null, // special rendering
 };
 
 // ---- 핫바 UI ----
@@ -67,16 +90,7 @@ const selectedBlockEl = document.getElementById('selected-block');
 
 function buildHotbar() {
     hudEl.innerHTML = '';
-    const blockColors = {
-        [BlockType.GRASS]: '#4c9900',
-        [BlockType.DIRT]: '#8b5a2b',
-        [BlockType.STONE]: '#808080',
-        [BlockType.WOOD]: '#654321',
-        [BlockType.LEAVES]: '#228b22',
-        [BlockType.SAND]: '#d2b48c',
-        [BlockType.WATER]: '#1e90ff',
-    };
-    PLACEABLE_BLOCKS.forEach((bt, i) => {
+    HOTBAR_ITEMS.forEach((item, i) => {
         const slot = document.createElement('div');
         slot.className = 'hotbar-slot' + (i === selectedSlot ? ' selected' : '');
         const num = document.createElement('span');
@@ -84,14 +98,22 @@ function buildHotbar() {
         num.textContent = i + 1;
         const preview = document.createElement('div');
         preview.className = 'block-preview';
-        preview.style.background = blockColors[bt] || '#888';
+
+        if (item === SPAWN_EGG_CLIONE) {
+            // Spawn egg style: gradient egg shape
+            preview.style.background = 'radial-gradient(ellipse at 40% 40%, #f0e0d8 0%, #e8c8b8 40%, #ff7040 100%)';
+            preview.style.borderRadius = '40% 40% 50% 50%';
+        } else {
+            preview.style.background = ITEM_COLORS[item] || '#888';
+        }
+
         slot.appendChild(num);
         slot.appendChild(preview);
         slot.addEventListener('click', () => selectSlot(i));
         slot.addEventListener('touchstart', (e) => { e.preventDefault(); selectSlot(i); }, { passive: false });
         hudEl.appendChild(slot);
     });
-    selectedBlockEl.textContent = BLOCK_NAMES_KO[PLACEABLE_BLOCKS[selectedSlot]];
+    selectedBlockEl.textContent = ITEM_NAMES_KO[HOTBAR_ITEMS[selectedSlot]] || '';
 }
 
 function selectSlot(idx) {
@@ -101,7 +123,7 @@ function selectSlot(idx) {
 
 document.addEventListener('keydown', (e) => {
     const num = parseInt(e.key);
-    if (num >= 1 && num <= 7) selectSlot(num - 1);
+    if (num >= 1 && num <= HOTBAR_ITEMS.length) selectSlot(num - 1);
 });
 
 buildHotbar();
@@ -141,6 +163,9 @@ function gameLoop(time) {
 
     world.update(player.position.x, player.position.z);
 
+    // 엔티티 업데이트 (자연 스폰 포함)
+    entityManager.update(dt, player.position.x, player.position.z);
+
     // 블록 상호작용
     interactCooldown -= dt;
     const dir = player.getDirection();
@@ -154,14 +179,21 @@ function gameLoop(time) {
     }
 
     if (interactCooldown <= 0) {
+        const currentItem = HOTBAR_ITEMS[selectedSlot];
+
         if (clicks.leftClick && hit) {
             world.setBlock(hit.x, hit.y, hit.z, BlockType.AIR);
             interactCooldown = 0.25;
         }
         if (clicks.rightClick && hit && hit.placeX !== undefined) {
-            const bt = PLACEABLE_BLOCKS[selectedSlot];
-            world.setBlock(hit.placeX, hit.placeY, hit.placeZ, bt);
-            interactCooldown = 0.25;
+            if (currentItem === SPAWN_EGG_CLIONE) {
+                // 클리오네 생성알 사용
+                entityManager.spawnClione(hit.placeX, hit.placeY, hit.placeZ);
+                interactCooldown = 0.25;
+            } else {
+                world.setBlock(hit.placeX, hit.placeY, hit.placeZ, currentItem);
+                interactCooldown = 0.25;
+            }
         }
     }
 
