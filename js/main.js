@@ -55,10 +55,12 @@ const input = new InputHandler(canvas);
 
 // ---- 핫바 아이템 정의 (블록 + 생성알) ----
 const SPAWN_EGG_CLIONE = 'spawn_clione';
+const SPAWN_EGG_MAJA = 'spawn_maja';
 
 const HOTBAR_ITEMS = [
     ...PLACEABLE_BLOCKS,
     SPAWN_EGG_CLIONE,
+    SPAWN_EGG_MAJA,
 ];
 
 const ITEM_NAMES_KO = {
@@ -70,6 +72,7 @@ const ITEM_NAMES_KO = {
     [BlockType.SAND]: '모래',
     [BlockType.WATER]: '물',
     [SPAWN_EGG_CLIONE]: '클리오네 생성알',
+    [SPAWN_EGG_MAJA]: '엘 그란 마하 생성알',
 };
 
 const ITEM_COLORS = {
@@ -100,8 +103,10 @@ function buildHotbar() {
         preview.className = 'block-preview';
 
         if (item === SPAWN_EGG_CLIONE) {
-            // Spawn egg style: gradient egg shape
             preview.style.background = 'radial-gradient(ellipse at 40% 40%, #f0e0d8 0%, #e8c8b8 40%, #ff7040 100%)';
+            preview.style.borderRadius = '40% 40% 50% 50%';
+        } else if (item === SPAWN_EGG_MAJA) {
+            preview.style.background = 'radial-gradient(ellipse at 40% 40%, #2a2a60 0%, #1a1a40 50%, #40ffcc 100%)';
             preview.style.borderRadius = '40% 40% 50% 50%';
         } else {
             preview.style.background = ITEM_COLORS[item] || '#888';
@@ -187,8 +192,10 @@ function gameLoop(time) {
         }
         if (clicks.rightClick && hit && hit.placeX !== undefined) {
             if (currentItem === SPAWN_EGG_CLIONE) {
-                // 클리오네 생성알 사용
                 entityManager.spawnClione(hit.placeX, hit.placeY, hit.placeZ);
+                interactCooldown = 0.25;
+            } else if (currentItem === SPAWN_EGG_MAJA) {
+                entityManager.spawnMaja(hit.placeX, hit.placeY, hit.placeZ);
                 interactCooldown = 0.25;
             } else {
                 world.setBlock(hit.placeX, hit.placeY, hit.placeZ, currentItem);
