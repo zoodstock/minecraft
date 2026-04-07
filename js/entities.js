@@ -137,159 +137,138 @@ const MAJA_EAT_RANGE = 1.5;
 
 function createMajaMesh() {
     const group = new THREE.Group();
-    const navyColor = 0x1a1a40;
-    const darkNavy = 0x12122e;
-    const bellyColor = 0x252550;
+    const blueColor = 0x4060a0;   // blue-indigo body
+    const darkBlue = 0x2a3a70;
+    const bellyColor = 0x5570b0;
 
-    // --- HEAD: wide manta-ray shape ---
-    // Main head - wide, flat, slightly curved
-    const headGeo = new THREE.BoxGeometry(2.4, 0.6, 1.4);
-    const headMat = new THREE.MeshLambertMaterial({ color: navyColor });
-    const headMesh = new THREE.Mesh(headGeo, headMat);
-    headMesh.position.set(0, 0, -1.2);
-    group.add(headMesh);
+    // --- HEAD: snake-like rounded shape ---
+    // Upper head - rounded using sphere, stretched
+    const headTopGeo = new THREE.SphereGeometry(0.8, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const headTopMat = new THREE.MeshLambertMaterial({ color: blueColor });
+    const headTop = new THREE.Mesh(headTopGeo, headTopMat);
+    headTop.scale.set(1.4, 0.7, 1.1);
+    headTop.position.set(0, 0.15, -1.5);
+    group.add(headTop);
 
-    // Head top ridge
-    const ridgeGeo = new THREE.BoxGeometry(1.2, 0.3, 1.0);
-    const ridgeMat = new THREE.MeshLambertMaterial({ color: darkNavy });
-    const ridge = new THREE.Mesh(ridgeGeo, ridgeMat);
-    ridge.position.set(0, 0.35, -1.0);
-    group.add(ridge);
+    // Snout - front elongation
+    const snoutGeo = new THREE.SphereGeometry(0.7, 8, 6);
+    const snoutMat = new THREE.MeshLambertMaterial({ color: blueColor });
+    const snout = new THREE.Mesh(snoutGeo, snoutMat);
+    snout.scale.set(1.2, 0.55, 0.8);
+    snout.position.set(0, 0.05, -2.1);
+    group.add(snout);
 
-    // Manta wing-fins (left & right extensions of head)
-    const finGeo = new THREE.BufferGeometry();
-    // Left fin - triangular shape
-    const finVerts = new Float32Array([
-        // top face
-        -1.2, 0.1, -0.5,   -2.2, -0.1, -1.2,   -1.2, 0.1, -1.8,
-        // bottom face
-        -1.2, -0.15, -0.5,  -1.2, -0.15, -1.8,  -2.2, -0.2, -1.2,
-        // front edge
-        -1.2, 0.1, -0.5,   -2.2, -0.1, -1.2,   -1.2, -0.15, -0.5,
-        -1.2, -0.15, -0.5,  -2.2, -0.1, -1.2,   -2.2, -0.2, -1.2,
-        // back edge
-        -1.2, 0.1, -1.8,   -1.2, -0.15, -1.8,  -2.2, -0.1, -1.2,
-        -1.2, -0.15, -1.8,  -2.2, -0.2, -1.2,   -2.2, -0.1, -1.2,
-    ]);
-    finGeo.setAttribute('position', new THREE.BufferAttribute(finVerts, 3));
-    finGeo.computeVertexNormals();
-    const finMat = new THREE.MeshLambertMaterial({ color: navyColor, side: THREE.DoubleSide });
+    // --- EYES: 6 in a single horizontal row on top of snout ---
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x40ffcc });
+    const eyeGlowMat = new THREE.MeshBasicMaterial({
+        color: 0x40ffcc, transparent: true, opacity: 0.35,
+    });
+    for (let i = 0; i < 6; i++) {
+        const xPos = (i - 2.5) * 0.18; // spread across snout top
+        const eyeGeo = new THREE.SphereGeometry(0.065, 6, 6);
+        const eye = new THREE.Mesh(eyeGeo, eyeMat);
+        eye.position.set(xPos, 0.38, -1.9);
+        eye.name = `eye${i}`;
+        group.add(eye);
 
-    const leftFin = new THREE.Mesh(finGeo, finMat);
-    leftFin.name = 'finL';
-    group.add(leftFin);
+        const glowGeo = new THREE.SphereGeometry(0.12, 6, 6);
+        const glow = new THREE.Mesh(glowGeo, eyeGlowMat.clone());
+        glow.position.set(xPos, 0.38, -1.9);
+        glow.name = `eyeGlow${i}`;
+        group.add(glow);
+    }
 
-    const rightFin = new THREE.Mesh(finGeo.clone(), finMat);
-    rightFin.scale.x = -1;
-    rightFin.name = 'finR';
-    group.add(rightFin);
-
-    // --- MOUTH: large gaping jaw ---
+    // --- MOUTH: huge gaping jaw with red gums ---
     // Upper jaw
-    const upperJawGeo = new THREE.BoxGeometry(1.8, 0.25, 0.8);
-    const jawMat = new THREE.MeshLambertMaterial({ color: darkNavy });
-    const upperJaw = new THREE.Mesh(upperJawGeo, jawMat);
-    upperJaw.position.set(0, -0.15, -2.0);
+    const upperJawGeo = new THREE.SphereGeometry(0.7, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+    const upperJawMat = new THREE.MeshLambertMaterial({ color: blueColor });
+    const upperJaw = new THREE.Mesh(upperJawGeo, upperJawMat);
+    upperJaw.scale.set(1.3, 0.3, 0.9);
+    upperJaw.rotation.x = Math.PI;
+    upperJaw.position.set(0, -0.05, -2.2);
     group.add(upperJaw);
 
-    // Lower jaw
-    const lowerJawGeo = new THREE.BoxGeometry(1.6, 0.2, 0.7);
-    const lowerJawMat = new THREE.MeshLambertMaterial({ color: 0x0e0e25 });
-    const lowerJaw = new THREE.Mesh(lowerJawGeo, lowerJawMat);
-    lowerJaw.position.set(0, -0.42, -1.9);
-    lowerJaw.name = 'lowerJaw';
-    group.add(lowerJaw);
+    // Lower jaw (opens)
+    const lowerJawGroup = new THREE.Group();
+    lowerJawGroup.name = 'lowerJaw';
+    lowerJawGroup.position.set(0, -0.15, -1.5);
 
-    // Mouth interior (dark)
-    const mouthGeo = new THREE.BoxGeometry(1.4, 0.3, 0.5);
-    const mouthMat = new THREE.MeshLambertMaterial({ color: 0x080818 });
-    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
-    mouth.position.set(0, -0.28, -1.8);
-    group.add(mouth);
+    const lowerJawGeo = new THREE.SphereGeometry(0.65, 8, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+    const lowerJawMat = new THREE.MeshLambertMaterial({ color: darkBlue });
+    const lowerJawMesh = new THREE.Mesh(lowerJawGeo, lowerJawMat);
+    lowerJawMesh.scale.set(1.2, 0.35, 0.85);
+    lowerJawMesh.position.set(0, 0, -0.7);
+    lowerJawGroup.add(lowerJawMesh);
 
-    // Teeth - upper row
-    const toothMat = new THREE.MeshLambertMaterial({ color: 0xccccbb });
+    // Red gums on lower jaw
+    const lowerGumGeo = new THREE.BoxGeometry(1.3, 0.06, 0.6);
+    const gumMat = new THREE.MeshLambertMaterial({ color: 0xbb2020 });
+    const lowerGum = new THREE.Mesh(lowerGumGeo, gumMat);
+    lowerGum.position.set(0, 0.08, -0.85);
+    lowerJawGroup.add(lowerGum);
+
+    // Lower teeth - big sharp
+    const toothMat = new THREE.MeshLambertMaterial({ color: 0xe8e8dd });
     for (let i = -5; i <= 5; i++) {
-        const toothGeo = new THREE.ConeGeometry(0.04, 0.15, 4);
+        const h = 0.2 + Math.random() * 0.12;
+        const toothGeo = new THREE.ConeGeometry(0.04, h, 4);
         const tooth = new THREE.Mesh(toothGeo, toothMat);
-        tooth.position.set(i * 0.15, -0.32, -2.35);
+        tooth.position.set(i * 0.11, 0.08 + h / 2, -0.9);
+        lowerJawGroup.add(tooth);
+    }
+    group.add(lowerJawGroup);
+
+    // Red gums on upper jaw
+    const upperGumGeo = new THREE.BoxGeometry(1.4, 0.06, 0.7);
+    const upperGum = new THREE.Mesh(upperGumGeo, gumMat);
+    upperGum.position.set(0, -0.12, -2.2);
+    group.add(upperGum);
+
+    // Upper teeth - big sharp, pointing down
+    for (let i = -6; i <= 6; i++) {
+        const h = 0.22 + Math.random() * 0.15;
+        const toothGeo = new THREE.ConeGeometry(0.045, h, 4);
+        const tooth = new THREE.Mesh(toothGeo, toothMat);
+        tooth.position.set(i * 0.1, -0.12 - h / 2, -2.25);
         tooth.rotation.x = Math.PI;
         group.add(tooth);
     }
-    // Teeth - lower row
-    for (let i = -4; i <= 4; i++) {
-        const toothGeo = new THREE.ConeGeometry(0.035, 0.12, 4);
-        const tooth = new THREE.Mesh(toothGeo, toothMat);
-        tooth.position.set(i * 0.16, -0.38, -2.3);
-        group.add(tooth);
-    }
 
-    // --- EYES: 6 small glowing eyes (3 per side) ---
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x40ffcc }); // glowing teal
-    const eyeGlowMat = new THREE.MeshBasicMaterial({
-        color: 0x40ffcc,
-        transparent: true,
-        opacity: 0.3,
-    });
-    const eyePositions = [
-        // Front face - 3 rows, 2 eyes per row, side by side
-        [-0.25, 0.25, -1.95],  [0.25, 0.25, -1.95],   // top pair
-        [-0.35, 0.08, -1.95],  [0.35, 0.08, -1.95],   // middle pair
-        [-0.2, -0.08, -1.95],  [0.2, -0.08, -1.95],   // bottom pair
-    ];
-    eyePositions.forEach((p, idx) => {
-        const eyeGeo = new THREE.SphereGeometry(0.06, 6, 6);
-        const eye = new THREE.Mesh(eyeGeo, eyeMat);
-        eye.position.set(...p);
-        eye.name = `eye${idx}`;
-        group.add(eye);
+    // Mouth interior - dark red
+    const mouthGeo = new THREE.BoxGeometry(1.1, 0.35, 0.5);
+    const mouthMat = new THREE.MeshLambertMaterial({ color: 0x3a0808 });
+    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+    mouth.position.set(0, -0.18, -1.9);
+    group.add(mouth);
 
-        // Glow around eye
-        const glowGeo = new THREE.SphereGeometry(0.12, 6, 6);
-        const glow = new THREE.Mesh(glowGeo, eyeGlowMat.clone());
-        glow.position.set(...p);
-        glow.name = `eyeGlow${idx}`;
-        group.add(glow);
-    });
-
-    // --- BODY: long eel-like segments ---
-    const segmentCount = 6;
+    // --- BODY: long snake/eel-like segments, rounded ---
+    const segmentCount = 8;
     for (let i = 0; i < segmentCount; i++) {
         const t = i / segmentCount;
-        const w = 1.8 * (1 - t * 0.6);  // taper from wide to narrow
-        const h = 0.5 * (1 - t * 0.4);
-        const segGeo = new THREE.BoxGeometry(w, h, 0.7);
+        const radius = 0.7 * (1 - t * 0.55);
+        const segGeo = new THREE.SphereGeometry(radius, 8, 6);
         const segMat = new THREE.MeshLambertMaterial({
-            color: new THREE.Color(navyColor).lerp(new THREE.Color(bellyColor), t * 0.3),
+            color: new THREE.Color(blueColor).lerp(new THREE.Color(bellyColor), t * 0.3),
         });
         const seg = new THREE.Mesh(segGeo, segMat);
-        seg.position.set(0, -0.05 * i, i * 0.65 + 0.0);
+        seg.scale.set(1, 0.7, 0.9);
+        seg.position.set(0, -0.03 * i, i * 0.55);
         seg.name = `bodySegment${i}`;
         group.add(seg);
     }
 
-    // Belly stripe (lighter underside)
-    for (let i = 0; i < 4; i++) {
-        const bw = 0.8 * (1 - i * 0.15);
-        const bellyGeo = new THREE.BoxGeometry(bw, 0.05, 0.6);
-        const bellyMat = new THREE.MeshLambertMaterial({ color: bellyColor });
-        const belly = new THREE.Mesh(bellyGeo, bellyMat);
-        belly.position.set(0, -0.3 - 0.03 * i, i * 0.65 + 0.0);
-        group.add(belly);
-    }
-
-    // --- TAIL: tapered end with fin ---
-    const tailGeo = new THREE.BoxGeometry(0.5, 0.3, 0.8);
-    const tailMat = new THREE.MeshLambertMaterial({ color: darkNavy });
+    // --- TAIL: tapered end ---
+    const tailGeo = new THREE.SphereGeometry(0.25, 6, 5);
+    const tailMat = new THREE.MeshLambertMaterial({ color: darkBlue });
     const tail = new THREE.Mesh(tailGeo, tailMat);
-    tail.position.set(0, -0.1, segmentCount * 0.65 + 0.3);
+    tail.scale.set(1, 0.6, 2);
+    tail.position.set(0, -0.2, segmentCount * 0.55 + 0.3);
     tail.name = 'tail';
     group.add(tail);
 
-    // Tail fin
-    const tailFinGeo = new THREE.BoxGeometry(0.8, 0.08, 0.5);
-    const tailFin = new THREE.Mesh(tailFinGeo, new THREE.MeshLambertMaterial({ color: navyColor }));
-    tailFin.position.set(0, 0, segmentCount * 0.65 + 0.9);
+    const tailFinGeo = new THREE.BoxGeometry(0.6, 0.04, 0.4);
+    const tailFin = new THREE.Mesh(tailFinGeo, new THREE.MeshLambertMaterial({ color: blueColor }));
+    tailFin.position.set(0, -0.15, segmentCount * 0.55 + 0.7);
     tailFin.name = 'tailFin';
     group.add(tailFin);
 
@@ -327,30 +306,24 @@ class ElGranMaja {
             }
         }
 
-        // Fin undulation
-        const finL = this.mesh.getObjectByName('finL');
-        const finR = this.mesh.getObjectByName('finR');
-        if (finL) finL.rotation.z = Math.sin(this.time * 1.5) * 0.15;
-        if (finR) finR.rotation.z = -Math.sin(this.time * 1.5) * 0.15;
-
-        // Body wave - subtle snake-like motion
-        for (let i = 0; i < 6; i++) {
+        // Body wave - snake-like undulation
+        for (let i = 0; i < 8; i++) {
             const seg = this.mesh.getObjectByName(`bodySegment${i}`);
             if (seg) {
-                seg.position.x = Math.sin(this.time * 2 + i * 0.8) * 0.08 * i;
+                seg.position.x = Math.sin(this.time * 2 + i * 0.7) * 0.06 * i;
             }
         }
         const tail = this.mesh.getObjectByName('tail');
-        if (tail) tail.position.x = Math.sin(this.time * 2 + 5) * 0.15;
+        if (tail) tail.position.x = Math.sin(this.time * 2 + 6) * 0.15;
         const tailFin = this.mesh.getObjectByName('tailFin');
         if (tailFin) tailFin.rotation.y = Math.sin(this.time * 2.5) * 0.3;
 
-        // Jaw animation
+        // Jaw animation - rotate open/closed
         const lowerJaw = this.mesh.getObjectByName('lowerJaw');
         if (lowerJaw) {
-            const targetJaw = this.eating ? 0.3 : (this.huntTarget ? 0.15 : 0);
+            const targetJaw = this.eating ? 0.4 : (this.huntTarget ? 0.2 : 0);
             this.jawOpen += (targetJaw - this.jawOpen) * dt * 5;
-            lowerJaw.position.y = -0.42 - this.jawOpen;
+            lowerJaw.rotation.x = this.jawOpen;
         }
 
         // --- HUNTING AI: find nearest clione ---
