@@ -232,14 +232,10 @@ function createMajaMesh() {
         opacity: 0.3,
     });
     const eyePositions = [
-        // Left side (3 eyes)
-        [-0.7, 0.2, -1.7],
-        [-0.9, 0.1, -1.4],
-        [-0.6, 0.3, -1.1],
-        // Right side (3 eyes)
-        [0.7, 0.2, -1.7],
-        [0.9, 0.1, -1.4],
-        [0.6, 0.3, -1.1],
+        // Front face - 3 rows, 2 eyes per row, side by side
+        [-0.25, 0.25, -1.95],  [0.25, 0.25, -1.95],   // top pair
+        [-0.35, 0.08, -1.95],  [0.35, 0.08, -1.95],   // middle pair
+        [-0.2, -0.08, -1.95],  [0.2, -0.08, -1.95],   // bottom pair
     ];
     eyePositions.forEach((p, idx) => {
         const eyeGeo = new THREE.SphereGeometry(0.06, 6, 6);
