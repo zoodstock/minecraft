@@ -3,56 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Minecraft Alpha</title>
+    <title>마인크래프트 알파</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <canvas id="game-canvas"></canvas>
 
-    <!-- Crosshair -->
+    <!-- 십자선 -->
     <div id="crosshair"></div>
 
-    <!-- Info -->
+    <!-- 정보 -->
     <div id="info" style="display:none;">
         <div id="fps">FPS: 0</div>
         <div id="coords">X: 0 Y: 0 Z: 0</div>
+        <div id="fly-status">걷기</div>
     </div>
 
-    <!-- Selected block name -->
-    <div id="selected-block" style="display:none;">Grass</div>
+    <!-- 선택된 블록 이름 -->
+    <div id="selected-block" style="display:none;">잔디</div>
 
-    <!-- Hotbar -->
+    <!-- 핫바 -->
     <div id="hud" style="display:none;"></div>
 
-    <!-- Start screen -->
+    <!-- 시작 화면 -->
     <div id="start-screen">
-        <h1>MINECRAFT</h1>
-        <p>Alpha Edition</p>
-        <button class="start-btn" id="start-btn">Play</button>
+        <h1>마인크래프트</h1>
+        <p>알파 에디션 - 크리에이티브 모드</p>
+        <button class="start-btn" id="start-btn">시작하기</button>
         <div class="controls-info">
-            <strong>PC:</strong> WASD - Move | Mouse - Look | Space - Jump<br>
-            Left Click - Break | Right Click - Place | 1~7 - Select Block<br><br>
-            <strong>Mobile:</strong> Left Stick - Move | Right Stick - Look<br>
-            Break/Place Buttons | Jump Button
+            <strong>PC:</strong> WASD - 이동 | 마우스 - 시점 | Space×2 - 비행 전환<br>
+            짧게 클릭 - 부수기 | 길게 클릭 - 설치 | 우클릭 - 설치 | 1~7 - 블록 선택<br>
+            비행 중: Space - 상승 | Shift - 하강<br><br>
+            <strong>모바일:</strong> 왼쪽 스틱 - 이동 | 오른쪽 스틱 - 시점<br>
+            부수기/설치 버튼 | 점프×2 - 비행 전환<br>
+            비행 중: 상승/하강 버튼
         </div>
     </div>
 
-    <!-- Mobile joysticks -->
+    <!-- 모바일 조이스틱 -->
     <div class="joystick-container" id="joystick-move">
         <div class="joystick-inner"></div>
-        <div class="joystick-label">MOVE</div>
+        <div class="joystick-label">이동</div>
     </div>
     <div class="joystick-container" id="joystick-look">
         <div class="joystick-inner"></div>
-        <div class="joystick-label">LOOK</div>
+        <div class="joystick-label">시점</div>
     </div>
 
-    <!-- Mobile action buttons -->
+    <!-- 모바일 액션 버튼 -->
     <div class="mobile-buttons">
-        <button class="action-btn" id="btn-break">BREAK</button>
-        <button class="action-btn" id="btn-place">PLACE</button>
+        <button class="action-btn" id="btn-break">부수기</button>
+        <button class="action-btn" id="btn-place">설치</button>
+        <button class="action-btn" id="btn-descend">하강</button>
     </div>
-    <button class="action-btn" id="btn-jump">JUMP</button>
+    <button class="action-btn" id="btn-jump">점프</button>
 
     <script type="importmap">
     {

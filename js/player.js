@@ -8,6 +8,9 @@ const GRAVITY = -25;
 const JUMP_SPEED = 9;
 const MOVE_SPEED = 5;
 const SPRINT_SPEED = 8;
+const FLY_SPEED = 12;
+const FLY_VERTICAL_SPEED = 8;
+const DOUBLE_TAP_TIME = 300; // ms
 
 export class Player {
     constructor(camera, world) {
@@ -19,6 +22,11 @@ export class Player {
         this.pitch = 0;
         this.yaw = 0;
 
+        // Creative mode flying
+        this.flying = false;
+        this.lastJumpTime = 0;
+        this.jumpWasPressed = false;
+
         // Spawn on solid ground
         for (let y = CHUNK_HEIGHT - 1; y >= 0; y--) {
             if (isSolid(world.getBlock(0, y, 0))) {
@@ -29,13 +37,23 @@ export class Player {
     }
 
     update(dt, inputState) {
-        // Limit dt to avoid tunneling
         dt = Math.min(dt, 0.05);
 
         // Mouse look
         this.yaw -= inputState.mouseDX * 0.002;
         this.pitch -= inputState.mouseDY * 0.002;
         this.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, this.pitch));
+
+        // Double-tap jump to toggle flying
+        const now = performance.now();
+        if (inputState.jump && !this.jumpWasPressed) {
+            if (now - this.lastJumpTime < DOUBLE_TAP_TIME) {
+                this.flying = !this.flying;
+                this.velocity.y = 0;
+            }
+            this.lastJumpTime = now;
+        }
+        this.jumpWasPressed = inputState.jump;
 
         // Movement direction
         const forward = new THREE.Vector3(
@@ -45,7 +63,7 @@ export class Player {
             Math.cos(this.yaw), 0, -Math.sin(this.yaw)
         ).normalize();
 
-        const speed = inputState.sprint ? SPRINT_SPEED : MOVE_SPEED;
+        const speed = this.flying ? FLY_SPEED : (inputState.sprint ? SPRINT_SPEED : MOVE_SPEED);
         const moveDir = new THREE.Vector3(0, 0, 0);
 
         if (inputState.forward) moveDir.add(forward);
@@ -61,19 +79,30 @@ export class Player {
 
         if (moveDir.length() > 0) moveDir.normalize();
 
-        // Apply horizontal velocity
+        // Apply velocity
         this.velocity.x = moveDir.x * speed;
         this.velocity.z = moveDir.z * speed;
 
-        // Gravity & jump
-        this.velocity.y += GRAVITY * dt;
-        if (inputState.jump && this.onGround) {
-            this.velocity.y = JUMP_SPEED;
-            this.onGround = false;
-        }
+        if (this.flying) {
+            // Flying mode: space=up, shift=down, no gravity
+            this.velocity.y = 0;
+            if (inputState.jump) this.velocity.y = FLY_VERTICAL_SPEED;
+            if (inputState.descend) this.velocity.y = -FLY_VERTICAL_SPEED;
 
-        // Move with collision
-        this._moveWithCollision(dt);
+            // Fly movement (no collision)
+            this.position.x += this.velocity.x * dt;
+            this.position.y += this.velocity.y * dt;
+            this.position.z += this.velocity.z * dt;
+            if (this.position.y < 1) this.position.y = 1;
+        } else {
+            // Normal mode: gravity & jump
+            this.velocity.y += GRAVITY * dt;
+            if (inputState.jump && this.onGround) {
+                this.velocity.y = JUMP_SPEED;
+                this.onGround = false;
+            }
+            this._moveWithCollision(dt);
+        }
 
         // Update camera
         this.camera.position.copy(this.position);
@@ -82,24 +111,20 @@ export class Player {
     }
 
     _moveWithCollision(dt) {
-        const w = this.world;
         const pw = PLAYER_WIDTH;
 
-        // Move X
         this.position.x += this.velocity.x * dt;
         if (this._collides(pw)) {
             this.position.x -= this.velocity.x * dt;
             this.velocity.x = 0;
         }
 
-        // Move Z
         this.position.z += this.velocity.z * dt;
         if (this._collides(pw)) {
             this.position.z -= this.velocity.z * dt;
             this.velocity.z = 0;
         }
 
-        // Move Y
         this.position.y += this.velocity.y * dt;
         this.onGround = false;
         if (this._collides(pw)) {
@@ -108,7 +133,6 @@ export class Player {
             this.velocity.y = 0;
         }
 
-        // Don't fall below world
         if (this.position.y < 1) {
             this.position.y = 1;
             this.velocity.y = 0;
@@ -118,7 +142,6 @@ export class Player {
 
     _collides(pw) {
         const px = this.position.x, py = this.position.y, pz = this.position.z;
-        // Check feet to head
         for (let dx = -1; dx <= 1; dx++) {
             for (let dz = -1; dz <= 1; dz++) {
                 for (let dy = -PLAYER_HEIGHT; dy <= 0.2; dy += 0.5) {
@@ -126,7 +149,6 @@ export class Player {
                     const by = Math.floor(py + dy + 0.5);
                     const bz = Math.floor(pz + dz * pw + 0.5);
                     if (isSolid(this.world.getBlock(bx, by, bz))) {
-                        // AABB check
                         const minX = bx - 0.5, maxX = bx + 0.5;
                         const minY = by - 0.5, maxY = by + 0.5;
                         const minZ = bz - 0.5, maxZ = bz + 0.5;

@@ -1,11 +1,14 @@
 // Input handler - keyboard, mouse, and mobile touch joystick
+// Short press = break, long press (300ms+) = place
+
+const LONG_PRESS_TIME = 300; // ms
 
 export class InputHandler {
     constructor(canvas) {
         this.canvas = canvas;
         this.state = {
             forward: false, backward: false, left: false, right: false,
-            jump: false, sprint: false,
+            jump: false, sprint: false, descend: false,
             mouseDX: 0, mouseDY: 0,
             leftClick: false, rightClick: false,
             joystickX: 0, joystickY: 0,
@@ -13,6 +16,10 @@ export class InputHandler {
         };
         this.isLocked = false;
         this.isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+        // For long-press detection on mouse
+        this._mouseDownTime = 0;
+        this._mouseIsDown = false;
 
         this._initKeyboard();
         this._initMouse();
@@ -29,7 +36,10 @@ export class InputHandler {
                 case 'KeyA': case 'ArrowLeft': this.state.left = true; break;
                 case 'KeyD': case 'ArrowRight': this.state.right = true; break;
                 case 'Space': this.state.jump = true; e.preventDefault(); break;
-                case 'ShiftLeft': case 'ShiftRight': this.state.sprint = true; break;
+                case 'ShiftLeft': case 'ShiftRight':
+                    this.state.sprint = true;
+                    this.state.descend = true;
+                    break;
             }
         });
         document.addEventListener('keyup', (e) => {
@@ -39,7 +49,10 @@ export class InputHandler {
                 case 'KeyA': case 'ArrowLeft': this.state.left = false; break;
                 case 'KeyD': case 'ArrowRight': this.state.right = false; break;
                 case 'Space': this.state.jump = false; break;
-                case 'ShiftLeft': case 'ShiftRight': this.state.sprint = false; break;
+                case 'ShiftLeft': case 'ShiftRight':
+                    this.state.sprint = false;
+                    this.state.descend = false;
+                    break;
             }
         });
     }
@@ -59,21 +72,34 @@ export class InputHandler {
                 this.state.mouseDY += e.movementY;
             }
         });
+        // Short press = break (left click), long press = place (right click)
         document.addEventListener('mousedown', (e) => {
             if (!this.isLocked) return;
-            if (e.button === 0) this.state.leftClick = true;
+            if (e.button === 0) {
+                this._mouseDownTime = performance.now();
+                this._mouseIsDown = true;
+            }
+            // Right click still works as place
             if (e.button === 2) this.state.rightClick = true;
+        });
+        document.addEventListener('mouseup', (e) => {
+            if (!this.isLocked) return;
+            if (e.button === 0 && this._mouseIsDown) {
+                const held = performance.now() - this._mouseDownTime;
+                if (held < LONG_PRESS_TIME) {
+                    this.state.leftClick = true;  // short = break
+                } else {
+                    this.state.rightClick = true;  // long = place
+                }
+                this._mouseIsDown = false;
+            }
         });
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
     _initJoysticks() {
-        // Left joystick - movement
         this.moveJoystick = this._createJoystick('joystick-move', true);
-        // Right joystick - look
         this.lookJoystick = this._createJoystick('joystick-look', false);
-
-        // Action buttons
         this._createActionButtons();
     }
 
@@ -87,7 +113,6 @@ export class InputHandler {
             active: false,
             touchId: null,
             startX: 0, startY: 0,
-            currentX: 0, currentY: 0,
             maxRadius: 50,
         };
 
@@ -162,14 +187,24 @@ export class InputHandler {
         const jumpBtn = document.getElementById('btn-jump');
         const breakBtn = document.getElementById('btn-break');
         const placeBtn = document.getElementById('btn-place');
+        const descendBtn = document.getElementById('btn-descend');
 
         if (jumpBtn) {
             jumpBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 this.state.jump = true;
             }, { passive: false });
-            jumpBtn.addEventListener('touchend', (e) => {
+            jumpBtn.addEventListener('touchend', () => {
                 this.state.jump = false;
+            });
+        }
+        if (descendBtn) {
+            descendBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.state.descend = true;
+            }, { passive: false });
+            descendBtn.addEventListener('touchend', () => {
+                this.state.descend = false;
             });
         }
         if (breakBtn) {
