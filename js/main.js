@@ -83,7 +83,8 @@ const ITEM_COLORS = {
     [BlockType.LEAVES]: '#228b22',
     [BlockType.SAND]: '#d2b48c',
     [BlockType.WATER]: '#1e90ff',
-    [SPAWN_EGG_CLIONE]: null, // special rendering
+    [SPAWN_EGG_CLIONE]: null,
+    [SPAWN_EGG_MAJA]: null,
 };
 
 // ---- 핫바 UI ----
