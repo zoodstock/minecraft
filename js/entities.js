@@ -425,6 +425,309 @@ class ElGranMaja {
 }
 
 // ============================================================
+// Bloop - giant pale sea creature
+// Huge gaping mouth, light gray/beige body, small eyes
+// Natural spawn only. Hunts Cliones. Fights El Gran Maja (loses after 5s).
+// ============================================================
+
+const BLOOP_SWIM_SPEED = 0.5;
+const BLOOP_HUNT_SPEED = 1.6;
+const BLOOP_CHARGE_SPEED = 3.5;
+const BLOOP_EAT_RANGE = 1.5;
+const BLOOP_FIGHT_RANGE = 15;
+const BLOOP_FIGHT_DURATION = 5;
+
+function createBloopMesh() {
+    const group = new THREE.Group();
+    const paleColor = 0xb0a898;
+    const lightGray = 0xc8c0b0;
+    const bellyColor = 0xd0c8b8;
+
+    // --- HEAD: massive rounded, wider than tall ---
+    const headGeo = new THREE.SphereGeometry(0.9, 10, 8);
+    const headMat = new THREE.MeshLambertMaterial({ color: paleColor });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.scale.set(1.5, 0.9, 1.2);
+    head.position.set(0, 0.1, -1.5);
+    group.add(head);
+
+    // Brow ridge
+    const browGeo = new THREE.SphereGeometry(0.5, 8, 5);
+    const browMat = new THREE.MeshLambertMaterial({ color: paleColor });
+    const brow = new THREE.Mesh(browGeo, browMat);
+    brow.scale.set(1.8, 0.4, 0.8);
+    brow.position.set(0, 0.35, -1.8);
+    group.add(brow);
+
+    // --- EYES: 2 small dark eyes on sides ---
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), eyeMat);
+    eyeL.position.set(-0.55, 0.35, -2.0);
+    group.add(eyeL);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), eyeMat);
+    eyeR.position.set(0.55, 0.35, -2.0);
+    group.add(eyeR);
+
+    // --- MOUTH: enormous gaping maw ---
+    // Upper jaw
+    const upperJawGeo = new THREE.SphereGeometry(0.8, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+    const upperJawMat = new THREE.MeshLambertMaterial({ color: paleColor });
+    const upperJaw = new THREE.Mesh(upperJawGeo, upperJawMat);
+    upperJaw.scale.set(1.4, 0.25, 1.0);
+    upperJaw.rotation.x = Math.PI;
+    upperJaw.position.set(0, -0.15, -2.0);
+    group.add(upperJaw);
+
+    // Lower jaw group
+    const lowerJawGroup = new THREE.Group();
+    lowerJawGroup.name = 'lowerJaw';
+    lowerJawGroup.position.set(0, -0.45, -1.9);
+
+    const lowerJawGeo = new THREE.BoxGeometry(1.5, 0.2, 0.8);
+    const lowerJawMat = new THREE.MeshLambertMaterial({ color: lightGray });
+    lowerJawGroup.add(new THREE.Mesh(lowerJawGeo, lowerJawMat));
+
+    // Lower gums - pinkish
+    const gumMat = new THREE.MeshLambertMaterial({ color: 0x996666 });
+    const lGum = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 0.7), gumMat);
+    lGum.position.set(0, 0.1, 0);
+    lowerJawGroup.add(lGum);
+
+    // Lower teeth
+    const toothMat = new THREE.MeshLambertMaterial({ color: 0xe0ddd5 });
+    for (let i = -5; i <= 5; i++) {
+        const h = 0.12 + Math.random() * 0.08;
+        const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.03, h, 4), toothMat);
+        tooth.position.set(i * 0.11, 0.1 + h / 2, -0.1);
+        lowerJawGroup.add(tooth);
+    }
+    group.add(lowerJawGroup);
+
+    // Upper gums
+    const uGum = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.8), gumMat);
+    uGum.position.set(0, -0.22, -2.0);
+    group.add(uGum);
+
+    // Upper teeth
+    for (let i = -6; i <= 6; i++) {
+        const h = 0.14 + Math.random() * 0.1;
+        const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.035, h, 4), toothMat);
+        tooth.position.set(i * 0.1, -0.22 - h / 2, -2.05);
+        tooth.rotation.x = Math.PI;
+        group.add(tooth);
+    }
+
+    // Mouth interior - dark
+    const mouthInner = new THREE.Mesh(
+        new THREE.BoxGeometry(1.1, 0.3, 0.5),
+        new THREE.MeshLambertMaterial({ color: 0x1a0a0a })
+    );
+    mouthInner.position.set(0, -0.3, -1.7);
+    group.add(mouthInner);
+
+    // --- BODY: massive pale segments ---
+    // Wrinkle lines on body (horizontal grooves like the image)
+    const segCount = 7;
+    for (let i = 0; i < segCount; i++) {
+        const t = i / segCount;
+        const r = 0.8 * (1 - t * 0.5);
+        const seg = new THREE.Mesh(
+            new THREE.SphereGeometry(r, 8, 6),
+            new THREE.MeshLambertMaterial({
+                color: new THREE.Color(paleColor).lerp(new THREE.Color(bellyColor), t * 0.4),
+            })
+        );
+        seg.scale.set(1, 0.7, 0.9);
+        seg.position.set(0, -0.02 * i, i * 0.6);
+        seg.name = `bodySegment${i}`;
+        group.add(seg);
+
+        // Wrinkle groove
+        if (i > 0 && i < segCount - 1) {
+            const groove = new THREE.Mesh(
+                new THREE.BoxGeometry(r * 1.8, 0.02, 0.05),
+                new THREE.MeshLambertMaterial({ color: 0x908878 })
+            );
+            groove.position.set(0, -0.02 * i - 0.1, i * 0.6 - 0.15);
+            group.add(groove);
+        }
+    }
+
+    // --- TAIL ---
+    const tail = new THREE.Mesh(
+        new THREE.SphereGeometry(0.2, 6, 5),
+        new THREE.MeshLambertMaterial({ color: lightGray })
+    );
+    tail.scale.set(1, 0.5, 2.5);
+    tail.position.set(0, -0.15, segCount * 0.6 + 0.3);
+    tail.name = 'tail';
+    group.add(tail);
+
+    return group;
+}
+
+class Bloop {
+    constructor(x, y, z) {
+        this.type = 'bloop';
+        this.mesh = createBloopMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * BLOOP_SWIM_SPEED,
+            0,
+            (Math.random() - 0.5) * BLOOP_SWIM_SPEED
+        );
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 3 + Math.random() * 4;
+        this.alive = true;
+        this.huntTarget = null;
+        this.jawOpen = 0;
+        this.eating = false;
+        this.eatTimer = 0;
+
+        // Fighting state
+        this.fightTarget = null;
+        this.fighting = false;
+        this.fightTimer = 0;
+    }
+
+    update(dt, world, cliones, majas) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Body wave
+        for (let i = 0; i < 7; i++) {
+            const seg = this.mesh.getObjectByName(`bodySegment${i}`);
+            if (seg) seg.position.x = Math.sin(this.time * 1.5 + i * 0.6) * 0.05 * i;
+        }
+        const tail = this.mesh.getObjectByName('tail');
+        if (tail) tail.position.x = Math.sin(this.time * 1.8 + 5) * 0.12;
+
+        // Jaw
+        const lowerJaw = this.mesh.getObjectByName('lowerJaw');
+        if (lowerJaw) {
+            const targetJaw = this.eating || this.fighting ? 0.35 : (this.huntTarget ? 0.12 : 0);
+            this.jawOpen += (targetJaw - this.jawOpen) * dt * 3;
+            lowerJaw.position.y = -0.45 - this.jawOpen;
+        }
+
+        const myPos = this.mesh.position;
+
+        // --- FIGHTING: check for nearby El Gran Maja ---
+        if (this.fighting) {
+            this.fightTimer -= dt;
+            if (this.fightTarget && this.fightTarget.alive) {
+                // Rush toward Maja
+                const target = this.fightTarget.mesh.position;
+                const dir = new THREE.Vector3(target.x - myPos.x, target.y - myPos.y, target.z - myPos.z);
+                const dist = dir.length();
+                if (dist > 0.5) {
+                    dir.normalize();
+                    this.velocity.set(dir.x * BLOOP_CHARGE_SPEED, dir.y * BLOOP_CHARGE_SPEED * 0.5, dir.z * BLOOP_CHARGE_SPEED);
+                } else {
+                    this.velocity.set(0, 0, 0);
+                }
+            }
+            if (this.fightTimer <= 0) {
+                // Bloop loses the fight and dies
+                this.alive = false;
+                return;
+            }
+        } else {
+            // Check for nearby Majas to fight
+            for (const maja of majas) {
+                if (!maja.alive) continue;
+                const dx = maja.mesh.position.x - myPos.x;
+                const dy = maja.mesh.position.y - myPos.y;
+                const dz = maja.mesh.position.z - myPos.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < BLOOP_FIGHT_RANGE) {
+                    this.fighting = true;
+                    this.fightTarget = maja;
+                    this.fightTimer = BLOOP_FIGHT_DURATION;
+                    break;
+                }
+            }
+        }
+
+        // --- HUNTING CLIONES (when not fighting) ---
+        if (!this.fighting) {
+            if (this.eating) {
+                this.eatTimer -= dt;
+                if (this.eatTimer <= 0) this.eating = false;
+            }
+
+            this.huntTarget = null;
+            let nearestDist = 15;
+            for (const c of cliones) {
+                if (!c.alive) continue;
+                const dx = c.mesh.position.x - myPos.x;
+                const dy = c.mesh.position.y - myPos.y;
+                const dz = c.mesh.position.z - myPos.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    this.huntTarget = c;
+                }
+            }
+
+            if (this.huntTarget && !this.eating) {
+                const target = this.huntTarget.mesh.position;
+                const dir = new THREE.Vector3(target.x - myPos.x, target.y - myPos.y, target.z - myPos.z);
+                const dist = dir.length();
+                if (dist > 0.1) dir.normalize();
+                this.velocity.x += dir.x * BLOOP_HUNT_SPEED * dt * 2;
+                this.velocity.y += dir.y * BLOOP_HUNT_SPEED * dt * 2;
+                this.velocity.z += dir.z * BLOOP_HUNT_SPEED * dt * 2;
+                const speed = this.velocity.length();
+                if (speed > BLOOP_HUNT_SPEED) this.velocity.multiplyScalar(BLOOP_HUNT_SPEED / speed);
+
+                if (dist < BLOOP_EAT_RANGE) {
+                    this.huntTarget.alive = false;
+                    this.eating = true;
+                    this.eatTimer = 1.5;
+                }
+            } else if (!this.eating) {
+                this.dirChangeTimer -= dt;
+                if (this.dirChangeTimer <= 0) {
+                    this.velocity.x = (Math.random() - 0.5) * BLOOP_SWIM_SPEED;
+                    this.velocity.z = (Math.random() - 0.5) * BLOOP_SWIM_SPEED;
+                    this.velocity.y = (Math.random() - 0.5) * 0.2;
+                    this.dirChangeTimer = 3 + Math.random() * 4;
+                }
+            }
+        }
+
+        // Move
+        myPos.x += this.velocity.x * dt;
+        myPos.y += this.velocity.y * dt;
+        myPos.z += this.velocity.z * dt;
+        myPos.y += Math.sin(this.time * 0.7) * 0.01 * dt;
+
+        // Face direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const targetYaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = targetYaw - this.mesh.rotation.y;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
+
+        this._stayInWater(world);
+    }
+
+    _stayInWater(world) {
+        const pos = this.mesh.position;
+        const bx = Math.floor(pos.x + 0.5), by = Math.floor(pos.y + 0.5), bz = Math.floor(pos.z + 0.5);
+        if (world.getBlock(bx, by, bz) !== BlockType.WATER) {
+            if (world.getBlock(bx, by + 1, bz) === BlockType.WATER) this.velocity.y = 0.4;
+            else if (world.getBlock(bx, by - 1, bz) === BlockType.WATER) this.velocity.y = -0.4;
+            else { this.velocity.x *= -1; this.velocity.z *= -1; }
+        }
+        if (pos.y < 1) { pos.y = 1; this.velocity.y = Math.abs(this.velocity.y); }
+    }
+}
+
+// ============================================================
 // Entity Manager
 // ============================================================
 
@@ -434,7 +737,9 @@ export class EntityManager {
         this.world = world;
         this.entities = [];
         this.spawnCheckTimer = 0;
+        this.bloopSpawnTimer = 0;
         this.maxCliones = 30;
+        this.maxBloops = 3;
     }
 
     spawnClione(x, y, z) {
@@ -451,7 +756,14 @@ export class EntityManager {
         return maja;
     }
 
-    tryNaturalSpawn(playerX, playerZ) {
+    spawnBloop(x, y, z) {
+        const bloop = new Bloop(x, y, z);
+        this.entities.push(bloop);
+        this.scene.add(bloop.mesh);
+        return bloop;
+    }
+
+    tryNaturalSpawnClione(playerX, playerZ) {
         const clionesCount = this.entities.filter(e => e.type === 'clione' && e.alive).length;
         if (clionesCount >= this.maxCliones) return;
 
@@ -468,15 +780,40 @@ export class EntityManager {
         }
     }
 
+    tryNaturalSpawnBloop(playerX, playerZ) {
+        const bloopCount = this.entities.filter(e => e.type === 'bloop' && e.alive).length;
+        if (bloopCount >= this.maxBloops) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 30 + Math.random() * 25;
+        const sx = Math.floor(playerX + Math.cos(angle) * dist);
+        const sz = Math.floor(playerZ + Math.sin(angle) * dist);
+
+        for (let y = 8; y <= 18; y++) {
+            if (this.world.getBlock(sx, y, sz) === BlockType.WATER) {
+                this.spawnBloop(sx, y, sz);
+                return;
+            }
+        }
+    }
+
     update(dt, playerX, playerZ) {
+        // Clione spawn
         this.spawnCheckTimer -= dt;
         if (this.spawnCheckTimer <= 0) {
-            this.tryNaturalSpawn(playerX, playerZ);
+            this.tryNaturalSpawnClione(playerX, playerZ);
             this.spawnCheckTimer = 3;
         }
 
-        // Get list of alive cliones for Maja hunting
+        // Bloop spawn
+        this.bloopSpawnTimer -= dt;
+        if (this.bloopSpawnTimer <= 0) {
+            this.tryNaturalSpawnBloop(playerX, playerZ);
+            this.bloopSpawnTimer = 10 + Math.random() * 10;
+        }
+
         const cliones = this.entities.filter(e => e.type === 'clione' && e.alive);
+        const majas = this.entities.filter(e => e.type === 'maja' && e.alive);
 
         for (let i = this.entities.length - 1; i >= 0; i--) {
             const entity = this.entities[i];
@@ -489,6 +826,8 @@ export class EntityManager {
 
             if (entity.type === 'maja') {
                 entity.update(dt, this.world, cliones);
+            } else if (entity.type === 'bloop') {
+                entity.update(dt, this.world, cliones, majas);
             } else {
                 entity.update(dt, this.world);
             }
@@ -496,7 +835,7 @@ export class EntityManager {
             // Remove if too far from player
             const dx = entity.mesh.position.x - playerX;
             const dz = entity.mesh.position.z - playerZ;
-            const maxDist = entity.type === 'maja' ? 120 : 80;
+            const maxDist = (entity.type === 'maja' || entity.type === 'bloop') ? 120 : 80;
             if (dx * dx + dz * dz > maxDist * maxDist) {
                 this.scene.remove(entity.mesh);
                 this.entities.splice(i, 1);
