@@ -141,39 +141,39 @@ function createMajaMesh() {
     const darkBlue = 0x2a3a70;
     const bellyColor = 0x5570b0;
 
-    // --- HEAD: snake-like rounded shape ---
-    // Upper head - rounded using sphere, stretched
+    // --- HEAD: snake-like rounded shape, wide and flat ---
+    // Upper head - wider and flatter
     const headTopGeo = new THREE.SphereGeometry(0.8, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2);
     const headTopMat = new THREE.MeshLambertMaterial({ color: blueColor });
     const headTop = new THREE.Mesh(headTopGeo, headTopMat);
-    headTop.scale.set(1.4, 0.7, 1.1);
+    headTop.scale.set(1.7, 0.55, 1.2);
     headTop.position.set(0, 0.15, -1.5);
     group.add(headTop);
 
-    // Snout - front elongation
+    // Snout - wider and flatter
     const snoutGeo = new THREE.SphereGeometry(0.7, 8, 6);
     const snoutMat = new THREE.MeshLambertMaterial({ color: blueColor });
     const snout = new THREE.Mesh(snoutGeo, snoutMat);
-    snout.scale.set(1.2, 0.55, 0.8);
+    snout.scale.set(1.5, 0.45, 0.9);
     snout.position.set(0, 0.05, -2.1);
     group.add(snout);
 
-    // --- EYES: 6 in a single horizontal row on top of snout ---
+    // --- EYES: 6 in a single horizontal row, slightly forward ---
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0x40ffcc });
     const eyeGlowMat = new THREE.MeshBasicMaterial({
         color: 0x40ffcc, transparent: true, opacity: 0.35,
     });
     for (let i = 0; i < 6; i++) {
-        const xPos = (i - 2.5) * 0.18; // spread across snout top
+        const xPos = (i - 2.5) * 0.18;
         const eyeGeo = new THREE.SphereGeometry(0.065, 6, 6);
         const eye = new THREE.Mesh(eyeGeo, eyeMat);
-        eye.position.set(xPos, 0.38, -1.9);
+        eye.position.set(xPos, 0.32, -2.15);
         eye.name = `eye${i}`;
         group.add(eye);
 
         const glowGeo = new THREE.SphereGeometry(0.12, 6, 6);
         const glow = new THREE.Mesh(glowGeo, eyeGlowMat.clone());
-        glow.position.set(xPos, 0.38, -1.9);
+        glow.position.set(xPos, 0.32, -2.15);
         glow.name = `eyeGlow${i}`;
         group.add(glow);
     }
