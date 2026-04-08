@@ -185,13 +185,13 @@ function createMajaMesh() {
     const upperJaw = new THREE.Mesh(upperJawGeo, upperJawMat);
     upperJaw.scale.set(1.3, 0.3, 0.9);
     upperJaw.rotation.x = Math.PI;
-    upperJaw.position.set(0, -0.05, -2.2);
+    upperJaw.position.set(0, -0.2, -2.2);
     group.add(upperJaw);
 
     // Lower jaw (opens via y position, no rotation)
     const lowerJawGroup = new THREE.Group();
     lowerJawGroup.name = 'lowerJaw';
-    lowerJawGroup.position.set(0, -0.35, -2.15);
+    lowerJawGroup.position.set(0, -0.5, -2.15);
 
     const lowerJawGeo = new THREE.BoxGeometry(1.4, 0.2, 0.7);
     const lowerJawMat = new THREE.MeshLambertMaterial({ color: darkBlue });
@@ -219,7 +219,7 @@ function createMajaMesh() {
     // Red gums on upper jaw
     const upperGumGeo = new THREE.BoxGeometry(1.4, 0.06, 0.7);
     const upperGum = new THREE.Mesh(upperGumGeo, gumMat);
-    upperGum.position.set(0, -0.12, -2.2);
+    upperGum.position.set(0, -0.27, -2.2);
     group.add(upperGum);
 
     // Upper teeth - big sharp, pointing down
@@ -227,7 +227,7 @@ function createMajaMesh() {
         const h = 0.22 + Math.random() * 0.15;
         const toothGeo = new THREE.ConeGeometry(0.045, h, 4);
         const tooth = new THREE.Mesh(toothGeo, toothMat);
-        tooth.position.set(i * 0.1, -0.12 - h / 2, -2.25);
+        tooth.position.set(i * 0.1, -0.27 - h / 2, -2.25);
         tooth.rotation.x = Math.PI;
         group.add(tooth);
     }
@@ -321,7 +321,7 @@ class ElGranMaja {
         if (lowerJaw) {
             const targetJaw = this.eating ? 0.35 : (this.huntTarget ? 0.15 : 0);
             this.jawOpen += (targetJaw - this.jawOpen) * dt * 3;
-            lowerJaw.position.y = -0.35 - this.jawOpen;
+            lowerJaw.position.y = -0.5 - this.jawOpen;
         }
 
         // --- HUNTING AI: find nearest clione ---
