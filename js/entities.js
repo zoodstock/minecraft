@@ -167,13 +167,13 @@ function createMajaMesh() {
         const xPos = (i - 2.5) * 0.18;
         const eyeGeo = new THREE.SphereGeometry(0.065, 6, 6);
         const eye = new THREE.Mesh(eyeGeo, eyeMat);
-        eye.position.set(xPos, 0.32, -2.45);
+        eye.position.set(xPos, 0.32, -4.0);
         eye.name = `eye${i}`;
         group.add(eye);
 
         const glowGeo = new THREE.SphereGeometry(0.12, 6, 6);
         const glow = new THREE.Mesh(glowGeo, eyeGlowMat.clone());
-        glow.position.set(xPos, 0.32, -2.45);
+        glow.position.set(xPos, 0.32, -4.0);
         glow.name = `eyeGlow${i}`;
         group.add(glow);
     }
