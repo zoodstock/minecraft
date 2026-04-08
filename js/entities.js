@@ -188,23 +188,21 @@ function createMajaMesh() {
     upperJaw.position.set(0, -0.05, -2.2);
     group.add(upperJaw);
 
-    // Lower jaw (opens)
+    // Lower jaw (opens via y position, no rotation)
     const lowerJawGroup = new THREE.Group();
     lowerJawGroup.name = 'lowerJaw';
-    lowerJawGroup.position.set(0, -0.15, -1.5);
+    lowerJawGroup.position.set(0, -0.35, -2.15);
 
-    const lowerJawGeo = new THREE.SphereGeometry(0.65, 8, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+    const lowerJawGeo = new THREE.BoxGeometry(1.4, 0.2, 0.7);
     const lowerJawMat = new THREE.MeshLambertMaterial({ color: darkBlue });
     const lowerJawMesh = new THREE.Mesh(lowerJawGeo, lowerJawMat);
-    lowerJawMesh.scale.set(1.2, 0.35, 0.85);
-    lowerJawMesh.position.set(0, 0, -0.7);
     lowerJawGroup.add(lowerJawMesh);
 
     // Red gums on lower jaw
-    const lowerGumGeo = new THREE.BoxGeometry(1.3, 0.06, 0.6);
     const gumMat = new THREE.MeshLambertMaterial({ color: 0xbb2020 });
+    const lowerGumGeo = new THREE.BoxGeometry(1.3, 0.06, 0.65);
     const lowerGum = new THREE.Mesh(lowerGumGeo, gumMat);
-    lowerGum.position.set(0, 0.08, -0.85);
+    lowerGum.position.set(0, 0.1, 0);
     lowerJawGroup.add(lowerGum);
 
     // Lower teeth - big sharp
@@ -213,7 +211,7 @@ function createMajaMesh() {
         const h = 0.2 + Math.random() * 0.12;
         const toothGeo = new THREE.ConeGeometry(0.04, h, 4);
         const tooth = new THREE.Mesh(toothGeo, toothMat);
-        tooth.position.set(i * 0.11, 0.08 + h / 2, -0.9);
+        tooth.position.set(i * 0.11, 0.1 + h / 2, -0.05);
         lowerJawGroup.add(tooth);
     }
     group.add(lowerJawGroup);
@@ -318,12 +316,12 @@ class ElGranMaja {
         const tailFin = this.mesh.getObjectByName('tailFin');
         if (tailFin) tailFin.rotation.y = Math.sin(this.time * 2.5) * 0.3;
 
-        // Jaw animation - rotate open/closed
+        // Jaw animation - move down to open
         const lowerJaw = this.mesh.getObjectByName('lowerJaw');
         if (lowerJaw) {
-            const targetJaw = this.eating ? 0.4 : (this.huntTarget ? 0.2 : 0);
-            this.jawOpen += (targetJaw - this.jawOpen) * dt * 5;
-            lowerJaw.rotation.x = this.jawOpen;
+            const targetJaw = this.eating ? 0.35 : (this.huntTarget ? 0.15 : 0);
+            this.jawOpen += (targetJaw - this.jawOpen) * dt * 3;
+            lowerJaw.position.y = -0.35 - this.jawOpen;
         }
 
         // --- HUNTING AI: find nearest clione ---
