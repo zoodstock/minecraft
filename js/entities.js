@@ -753,6 +753,243 @@ class Bloop {
 }
 
 // ============================================================
+// Meowl - flying cat-owl hybrid
+// Cat head with big round eyes, owl body with wings
+// Flies in the sky, natural spawn only. Peaceful.
+// ============================================================
+
+const MEOWL_FLY_SPEED = 1.2;
+const MEOWL_WING_SPEED = 4;
+
+function createMeowlMesh() {
+    const group = new THREE.Group();
+    const tabbyBrown = 0x8b7355;
+    const tabbyDark = 0x6b5535;
+    const white = 0xf0ece0;
+    const pinkNose = 0xeea0a0;
+
+    // --- HEAD: cat-shaped, blocky ---
+    const headGeo = new THREE.BoxGeometry(0.7, 0.65, 0.6);
+    const headMat = new THREE.MeshLambertMaterial({ color: tabbyBrown });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 0.55, -0.3);
+    group.add(head);
+
+    // White face patch (lower face)
+    const facePatch = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.35, 0.05),
+        new THREE.MeshLambertMaterial({ color: white })
+    );
+    facePatch.position.set(0, 0.45, -0.63);
+    group.add(facePatch);
+
+    // Cat ears - two triangular blocks
+    const earMat = new THREE.MeshLambertMaterial({ color: tabbyBrown });
+    const earInnerMat = new THREE.MeshLambertMaterial({ color: pinkNose });
+
+    const earL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.25, 0.15), earMat);
+    earL.position.set(-0.22, 0.95, -0.3);
+    earL.rotation.z = 0.15;
+    group.add(earL);
+    const earLInner = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.05), earInnerMat);
+    earLInner.position.set(-0.22, 0.93, -0.38);
+    group.add(earLInner);
+
+    const earR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.25, 0.15), earMat);
+    earR.position.set(0.22, 0.95, -0.3);
+    earR.rotation.z = -0.15;
+    group.add(earR);
+    const earRInner = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.05), earInnerMat);
+    earRInner.position.set(0.22, 0.93, -0.38);
+    group.add(earRInner);
+
+    // Big round cat eyes (large, cute)
+    const eyeWhiteMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const eyePupilMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
+
+    // Left eye
+    const eyeWhiteL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.22, 0.05), eyeWhiteMat);
+    eyeWhiteL.position.set(-0.15, 0.58, -0.63);
+    group.add(eyeWhiteL);
+    const pupilL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.06), eyePupilMat);
+    pupilL.position.set(-0.15, 0.57, -0.65);
+    group.add(pupilL);
+
+    // Right eye
+    const eyeWhiteR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.22, 0.05), eyeWhiteMat);
+    eyeWhiteR.position.set(0.15, 0.58, -0.63);
+    group.add(eyeWhiteR);
+    const pupilR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.06), eyePupilMat);
+    pupilR.position.set(0.15, 0.57, -0.65);
+    group.add(pupilR);
+
+    // Pink nose
+    const nose = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.06, 0.06),
+        new THREE.MeshLambertMaterial({ color: pinkNose })
+    );
+    nose.position.set(0, 0.44, -0.65);
+    group.add(nose);
+
+    // Whisker marks (dark lines on cheeks)
+    const whiskerMat = new THREE.MeshLambertMaterial({ color: tabbyDark });
+    for (const side of [-1, 1]) {
+        for (let j = 0; j < 2; j++) {
+            const w = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, 0.02), whiskerMat);
+            w.position.set(side * 0.28, 0.42 - j * 0.06, -0.55);
+            group.add(w);
+        }
+    }
+
+    // Tabby stripes on forehead
+    for (let i = 0; i < 3; i++) {
+        const stripe = new THREE.Mesh(
+            new THREE.BoxGeometry(0.35 - i * 0.08, 0.04, 0.05),
+            new THREE.MeshLambertMaterial({ color: tabbyDark })
+        );
+        stripe.position.set(0, 0.72 + i * 0.07, -0.63);
+        group.add(stripe);
+    }
+
+    // --- BODY: owl-shaped, round and plump ---
+    const bodyGeo = new THREE.BoxGeometry(0.8, 0.7, 0.9);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: tabbyBrown });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.set(0, 0.05, 0.15);
+    group.add(body);
+
+    // White chest (owl breast)
+    const chest = new THREE.Mesh(
+        new THREE.BoxGeometry(0.55, 0.55, 0.05),
+        new THREE.MeshLambertMaterial({ color: white })
+    );
+    chest.position.set(0, 0.05, -0.3);
+    group.add(chest);
+
+    // Brown/tan feather pattern on chest
+    const featherMat = new THREE.MeshLambertMaterial({ color: 0xc0a878 });
+    for (let i = 0; i < 3; i++) {
+        const feather = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.04, 0.06), featherMat);
+        feather.position.set(0, -0.05 + i * 0.12, -0.28);
+        group.add(feather);
+    }
+
+    // --- WINGS: owl wings, flap up/down ---
+    const wingMat = new THREE.MeshLambertMaterial({ color: tabbyBrown });
+    const wingTipMat = new THREE.MeshLambertMaterial({ color: tabbyDark });
+
+    // Left wing
+    const wingLGroup = new THREE.Group();
+    wingLGroup.name = 'wingL';
+    wingLGroup.position.set(-0.4, 0.15, 0.15);
+    const wingLMain = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.7), wingMat);
+    wingLMain.position.set(-0.3, 0, 0);
+    wingLGroup.add(wingLMain);
+    const wingLTip = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.06, 0.5), wingTipMat);
+    wingLTip.position.set(-0.55, 0, 0.05);
+    wingLGroup.add(wingLTip);
+    group.add(wingLGroup);
+
+    // Right wing
+    const wingRGroup = new THREE.Group();
+    wingRGroup.name = 'wingR';
+    wingRGroup.position.set(0.4, 0.15, 0.15);
+    const wingRMain = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.7), wingMat);
+    wingRMain.position.set(0.3, 0, 0);
+    wingRGroup.add(wingRMain);
+    const wingRTip = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.06, 0.5), wingTipMat);
+    wingRTip.position.set(0.55, 0, 0.05);
+    wingRGroup.add(wingRTip);
+    group.add(wingRGroup);
+
+    // --- TAIL: short owl tail feathers ---
+    const tailGeo = new THREE.BoxGeometry(0.35, 0.06, 0.3);
+    const tailMesh = new THREE.Mesh(tailGeo, new THREE.MeshLambertMaterial({ color: tabbyDark }));
+    tailMesh.position.set(0, -0.05, 0.65);
+    tailMesh.name = 'tail';
+    group.add(tailMesh);
+
+    // --- FEET: small owl talons ---
+    const footMat = new THREE.MeshLambertMaterial({ color: 0xd4a050 });
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.15), footMat);
+    footL.position.set(-0.15, -0.35, 0.1);
+    group.add(footL);
+    const footR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.15), footMat);
+    footR.position.set(0.15, -0.35, 0.1);
+    group.add(footR);
+
+    return group;
+}
+
+class Meowl {
+    constructor(x, y, z) {
+        this.type = 'meowl';
+        this.mesh = createMeowlMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * MEOWL_FLY_SPEED,
+            0,
+            (Math.random() - 0.5) * MEOWL_FLY_SPEED
+        );
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 3 + Math.random() * 5;
+        this.alive = true;
+    }
+
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Wing flapping
+        const wingL = this.mesh.getObjectByName('wingL');
+        const wingR = this.mesh.getObjectByName('wingR');
+        if (wingL && wingR) {
+            const flap = Math.sin(this.time * MEOWL_WING_SPEED) * 0.6;
+            wingL.rotation.z = flap;
+            wingR.rotation.z = -flap;
+        }
+
+        // Gentle bob up/down
+        this.mesh.position.y += Math.sin(this.time * 1.5) * 0.015 * dt;
+
+        // Tail sway
+        const tail = this.mesh.getObjectByName('tail');
+        if (tail) tail.rotation.y = Math.sin(this.time * 2) * 0.2;
+
+        // Change direction
+        this.dirChangeTimer -= dt;
+        if (this.dirChangeTimer <= 0) {
+            this.velocity.x = (Math.random() - 0.5) * MEOWL_FLY_SPEED;
+            this.velocity.z = (Math.random() - 0.5) * MEOWL_FLY_SPEED;
+            this.velocity.y = (Math.random() - 0.5) * 0.3;
+            this.dirChangeTimer = 3 + Math.random() * 5;
+        }
+
+        // Move
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+
+        // Stay in sky (between y 30-55)
+        if (pos.y < 30) { pos.y = 30; this.velocity.y = Math.abs(this.velocity.y) + 0.2; }
+        if (pos.y > 55) { pos.y = 55; this.velocity.y = -Math.abs(this.velocity.y) - 0.2; }
+
+        // Face movement direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const targetYaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = targetYaw - this.mesh.rotation.y;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 3;
+        }
+
+        // Slight tilt when turning
+        this.mesh.rotation.z = -this.velocity.x * 0.15;
+    }
+}
+
+// ============================================================
 // Entity Manager
 // ============================================================
 
@@ -763,8 +1000,10 @@ export class EntityManager {
         this.entities = [];
         this.spawnCheckTimer = 0;
         this.bloopSpawnTimer = 0;
+        this.meowlSpawnTimer = 0;
         this.maxCliones = 30;
         this.maxBloops = 3;
+        this.maxMeowls = 5;
     }
 
     spawnClione(x, y, z) {
@@ -822,12 +1061,34 @@ export class EntityManager {
         }
     }
 
+    tryNaturalSpawnMeowl(playerX, playerZ) {
+        const meowlCount = this.entities.filter(e => e.type === 'meowl' && e.alive).length;
+        if (meowlCount >= this.maxMeowls) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 25 + Math.random() * 30;
+        const sx = playerX + Math.cos(angle) * dist;
+        const sz = playerZ + Math.sin(angle) * dist;
+        const sy = 35 + Math.random() * 15; // sky height
+
+        const meowl = new Meowl(sx, sy, sz);
+        this.entities.push(meowl);
+        this.scene.add(meowl.mesh);
+    }
+
     update(dt, playerX, playerZ) {
         // Clione spawn
         this.spawnCheckTimer -= dt;
         if (this.spawnCheckTimer <= 0) {
             this.tryNaturalSpawnClione(playerX, playerZ);
             this.spawnCheckTimer = 3;
+        }
+
+        // Meowl spawn
+        this.meowlSpawnTimer -= dt;
+        if (this.meowlSpawnTimer <= 0) {
+            this.tryNaturalSpawnMeowl(playerX, playerZ);
+            this.meowlSpawnTimer = 8 + Math.random() * 8;
         }
 
         // Bloop spawn
@@ -853,6 +1114,8 @@ export class EntityManager {
                 entity.update(dt, this.world, cliones);
             } else if (entity.type === 'bloop') {
                 entity.update(dt, this.world, cliones, majas);
+            } else if (entity.type === 'meowl') {
+                entity.update(dt);
             } else {
                 entity.update(dt, this.world);
             }
@@ -860,7 +1123,7 @@ export class EntityManager {
             // Remove if too far from player
             const dx = entity.mesh.position.x - playerX;
             const dz = entity.mesh.position.z - playerZ;
-            const maxDist = (entity.type === 'maja' || entity.type === 'bloop') ? 120 : 80;
+            const maxDist = (entity.type === 'maja' || entity.type === 'bloop') ? 120 : (entity.type === 'meowl' ? 100 : 80);
             if (dx * dx + dz * dz > maxDist * maxDist) {
                 this.scene.remove(entity.mesh);
                 this.entities.splice(i, 1);
