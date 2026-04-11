@@ -89,6 +89,36 @@ body {
     color: #aaa;
 }
 
+/* Tame progress bar */
+#tame-bar {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, 30px);
+    width: 120px;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    z-index: 15;
+    overflow: hidden;
+}
+#tame-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: #44ff44;
+    border-radius: 4px;
+    transition: width 0.1s;
+}
+#tame-bar-text {
+    position: absolute;
+    top: -18px;
+    width: 100%;
+    text-align: center;
+    color: #44ff44;
+    font-size: 11px;
+    text-shadow: 1px 1px 2px #000;
+}
+
 /* Info panel */
 #info {
     position: fixed;
