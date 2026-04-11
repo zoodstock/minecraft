@@ -145,6 +145,12 @@ let frameCount = 0, lastFpsTime = 0;
 // ---- 블록 상호작용 쿨다운 ----
 let interactCooldown = 0;
 
+// ---- 물블록 위협 시스템 ----
+let threatTimer = 0;
+let threatTarget = null;
+const THREAT_RANGE = 9;
+const THREAT_TIME = 3;
+
 // ---- 게임 루프 ----
 let lastTime = 0;
 let started = false;
@@ -229,6 +235,55 @@ function gameLoop(time) {
 
     // 비행 상태
     flyStatusEl.textContent = player.flying ? '비행 중' : '걷기';
+
+    // ---- 물블록 위협 시스템: 물블록 들고 있으면 근처 야생 몹에 빨간 바 ----
+    const currentHeld = HOTBAR_ITEMS[selectedSlot];
+    const holdingWater = currentHeld === BlockType.WATER;
+    const threatBar = document.getElementById('threat-bar');
+    const threatBarFill = document.getElementById('threat-bar-fill');
+
+    if (holdingWater) {
+        // 가장 가까운 길들이지 않은 몹 찾기
+        let nearestWild = null;
+        let nearestDist = THREAT_RANGE;
+        for (const e of entityManager.entities) {
+            if (e.tamed || !e.alive) continue;
+            const dx = e.mesh.position.x - player.position.x;
+            const dy = e.mesh.position.y - player.position.y;
+            const dz = e.mesh.position.z - player.position.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearestWild = e;
+            }
+        }
+
+        if (nearestWild) {
+            if (threatTarget !== nearestWild) {
+                threatTarget = nearestWild;
+                threatTimer = 0;
+            }
+            threatTimer += dt;
+            threatBar.style.display = 'block';
+            const pct = Math.min(100, (threatTimer / THREAT_TIME) * 100);
+            threatBarFill.style.width = pct + '%';
+
+            if (threatTimer >= THREAT_TIME) {
+                // 길들인 몹들이 공격
+                entityManager.commandAttack(threatTarget);
+                threatTimer = 0;
+                threatTarget = null;
+            }
+        } else {
+            threatTimer = 0;
+            threatTarget = null;
+            threatBar.style.display = 'none';
+        }
+    } else {
+        threatTimer = 0;
+        threatTarget = null;
+        threatBar.style.display = 'none';
+    }
 
     // 길들이기 진행률 표시
     const tameBar = document.getElementById('tame-bar');

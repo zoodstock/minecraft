@@ -119,6 +119,36 @@ body {
     text-shadow: 1px 1px 2px #000;
 }
 
+/* Threat bar (water block) */
+#threat-bar {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, 50px);
+    width: 120px;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    z-index: 15;
+    overflow: hidden;
+}
+#threat-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: #ff3333;
+    border-radius: 4px;
+    transition: width 0.1s;
+}
+#threat-bar-text {
+    position: absolute;
+    top: -18px;
+    width: 100%;
+    text-align: center;
+    color: #ff4444;
+    font-size: 11px;
+    text-shadow: 1px 1px 2px #000;
+}
+
 /* Info panel */
 #info {
     position: fixed;
