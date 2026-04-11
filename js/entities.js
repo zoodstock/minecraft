@@ -439,129 +439,154 @@ const BLOOP_FIGHT_DURATION = 5;
 
 function createBloopMesh() {
     const group = new THREE.Group();
-    const paleColor = 0xb0a898;
-    const lightGray = 0xc8c0b0;
-    const bellyColor = 0xd0c8b8;
+    const olive = 0x8a8a50;       // main body olive/khaki
+    const darkOlive = 0x707040;   // darker shade
+    const belly = 0xa0a070;       // lighter underside
+    const mouthRed = 0xaa3020;    // red mouth interior
 
-    // --- HEAD: massive rounded, wider than tall ---
-    const headGeo = new THREE.SphereGeometry(0.9, 10, 8);
-    const headMat = new THREE.MeshLambertMaterial({ color: paleColor });
+    // All BoxGeometry for voxel/blocky Minecraft style
+
+    // --- HEAD: big blocky snout ---
+    const headGeo = new THREE.BoxGeometry(1.6, 1.0, 1.8);
+    const headMat = new THREE.MeshLambertMaterial({ color: olive });
     const head = new THREE.Mesh(headGeo, headMat);
-    head.scale.set(1.5, 0.9, 1.2);
-    head.position.set(0, 0.1, -1.5);
+    head.position.set(0, 0.1, -1.8);
     group.add(head);
 
-    // Brow ridge
-    const browGeo = new THREE.SphereGeometry(0.5, 8, 5);
-    const browMat = new THREE.MeshLambertMaterial({ color: paleColor });
-    const brow = new THREE.Mesh(browGeo, browMat);
-    brow.scale.set(1.8, 0.4, 0.8);
-    brow.position.set(0, 0.35, -1.8);
-    group.add(brow);
+    // Snout top (slightly narrower front block)
+    const snoutGeo = new THREE.BoxGeometry(1.4, 0.5, 0.8);
+    const snoutMat = new THREE.MeshLambertMaterial({ color: olive });
+    const snout = new THREE.Mesh(snoutGeo, snoutMat);
+    snout.position.set(0, 0.3, -2.9);
+    group.add(snout);
 
-    // --- EYES: 2 small dark eyes on sides ---
+    // --- EYES: 2 small dark blocky eyes ---
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), eyeMat);
-    eyeL.position.set(-0.55, 0.35, -2.0);
+    const eyeGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.5, 0.5, -2.6);
     group.add(eyeL);
-    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), eyeMat);
-    eyeR.position.set(0.55, 0.35, -2.0);
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeR.position.set(0.5, 0.5, -2.6);
     group.add(eyeR);
 
-    // --- MOUTH: enormous gaping maw ---
-    // Upper jaw
-    const upperJawGeo = new THREE.SphereGeometry(0.8, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
-    const upperJawMat = new THREE.MeshLambertMaterial({ color: paleColor });
+    // --- UPPER JAW ---
+    const upperJawGeo = new THREE.BoxGeometry(1.5, 0.3, 1.0);
+    const upperJawMat = new THREE.MeshLambertMaterial({ color: olive });
     const upperJaw = new THREE.Mesh(upperJawGeo, upperJawMat);
-    upperJaw.scale.set(1.4, 0.25, 1.0);
-    upperJaw.rotation.x = Math.PI;
-    upperJaw.position.set(0, -0.15, -2.0);
+    upperJaw.position.set(0, -0.15, -2.8);
     group.add(upperJaw);
 
-    // Lower jaw group
+    // Upper gum (red/pink strip)
+    const gumMat = new THREE.MeshLambertMaterial({ color: mouthRed });
+    const upperGum = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.08, 0.9), gumMat);
+    upperGum.position.set(0, -0.35, -2.8);
+    group.add(upperGum);
+
+    // Upper teeth - blocky rectangles
+    const toothMat = new THREE.MeshLambertMaterial({ color: 0xe8e0c8 });
+    for (let i = -4; i <= 4; i++) {
+        const h = 0.18 + Math.random() * 0.08;
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.1, h, 0.08), toothMat);
+        tooth.position.set(i * 0.14, -0.35 - h / 2, -3.15);
+        group.add(tooth);
+    }
+
+    // --- LOWER JAW (movable) ---
     const lowerJawGroup = new THREE.Group();
     lowerJawGroup.name = 'lowerJaw';
-    lowerJawGroup.position.set(0, -0.45, -1.9);
+    lowerJawGroup.position.set(0, -0.55, -2.6);
 
-    const lowerJawGeo = new THREE.BoxGeometry(1.5, 0.2, 0.8);
-    const lowerJawMat = new THREE.MeshLambertMaterial({ color: lightGray });
+    const lowerJawGeo = new THREE.BoxGeometry(1.4, 0.25, 1.0);
+    const lowerJawMat = new THREE.MeshLambertMaterial({ color: belly });
     lowerJawGroup.add(new THREE.Mesh(lowerJawGeo, lowerJawMat));
 
-    // Lower gums - pinkish
-    const gumMat = new THREE.MeshLambertMaterial({ color: 0x996666 });
-    const lGum = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 0.7), gumMat);
-    lGum.position.set(0, 0.1, 0);
-    lowerJawGroup.add(lGum);
+    // Lower gum
+    const lowerGum = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.9), gumMat);
+    lowerGum.position.set(0, 0.15, 0);
+    lowerJawGroup.add(lowerGum);
 
-    // Lower teeth
-    const toothMat = new THREE.MeshLambertMaterial({ color: 0xe0ddd5 });
-    for (let i = -5; i <= 5; i++) {
-        const h = 0.12 + Math.random() * 0.08;
-        const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.03, h, 4), toothMat);
-        tooth.position.set(i * 0.11, 0.1 + h / 2, -0.1);
+    // Lower teeth - blocky
+    for (let i = -4; i <= 4; i++) {
+        const h = 0.15 + Math.random() * 0.06;
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.09, h, 0.07), toothMat);
+        tooth.position.set(i * 0.14, 0.15 + h / 2, -0.3);
         lowerJawGroup.add(tooth);
     }
     group.add(lowerJawGroup);
 
-    // Upper gums
-    const uGum = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.8), gumMat);
-    uGum.position.set(0, -0.22, -2.0);
-    group.add(uGum);
-
-    // Upper teeth
-    for (let i = -6; i <= 6; i++) {
-        const h = 0.14 + Math.random() * 0.1;
-        const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.035, h, 4), toothMat);
-        tooth.position.set(i * 0.1, -0.22 - h / 2, -2.05);
-        tooth.rotation.x = Math.PI;
-        group.add(tooth);
-    }
-
-    // Mouth interior - dark
+    // --- MOUTH INTERIOR: deep red ---
     const mouthInner = new THREE.Mesh(
-        new THREE.BoxGeometry(1.1, 0.3, 0.5),
-        new THREE.MeshLambertMaterial({ color: 0x1a0a0a })
+        new THREE.BoxGeometry(1.2, 0.5, 0.8),
+        new THREE.MeshLambertMaterial({ color: mouthRed })
     );
-    mouthInner.position.set(0, -0.3, -1.7);
+    mouthInner.position.set(0, -0.35, -2.5);
     group.add(mouthInner);
 
-    // --- BODY: massive pale segments ---
-    // Wrinkle lines on body (horizontal grooves like the image)
-    const segCount = 7;
+    // --- BODY: blocky segments, getting narrower ---
+    const segCount = 6;
     for (let i = 0; i < segCount; i++) {
         const t = i / segCount;
-        const r = 0.8 * (1 - t * 0.5);
+        const w = 1.5 * (1 - t * 0.5);
+        const h = 1.0 * (1 - t * 0.4);
         const seg = new THREE.Mesh(
-            new THREE.SphereGeometry(r, 8, 6),
+            new THREE.BoxGeometry(w, h, 0.7),
             new THREE.MeshLambertMaterial({
-                color: new THREE.Color(paleColor).lerp(new THREE.Color(bellyColor), t * 0.4),
+                color: new THREE.Color(olive).lerp(new THREE.Color(darkOlive), t * 0.5),
             })
         );
-        seg.scale.set(1, 0.7, 0.9);
-        seg.position.set(0, -0.02 * i, i * 0.6);
+        seg.position.set(0, -0.02 * i, i * 0.65);
         seg.name = `bodySegment${i}`;
         group.add(seg);
-
-        // Wrinkle groove
-        if (i > 0 && i < segCount - 1) {
-            const groove = new THREE.Mesh(
-                new THREE.BoxGeometry(r * 1.8, 0.02, 0.05),
-                new THREE.MeshLambertMaterial({ color: 0x908878 })
-            );
-            groove.position.set(0, -0.02 * i - 0.1, i * 0.6 - 0.15);
-            group.add(groove);
-        }
     }
 
-    // --- TAIL ---
-    const tail = new THREE.Mesh(
-        new THREE.SphereGeometry(0.2, 6, 5),
-        new THREE.MeshLambertMaterial({ color: lightGray })
-    );
-    tail.scale.set(1, 0.5, 2.5);
-    tail.position.set(0, -0.15, segCount * 0.6 + 0.3);
-    tail.name = 'tail';
-    group.add(tail);
+    // Belly (lighter underside strip)
+    for (let i = 0; i < 4; i++) {
+        const bw = 0.7 * (1 - i * 0.12);
+        const bellyBlock = new THREE.Mesh(
+            new THREE.BoxGeometry(bw, 0.08, 0.6),
+            new THREE.MeshLambertMaterial({ color: belly })
+        );
+        bellyBlock.position.set(0, -0.45 - i * 0.02, i * 0.65);
+        group.add(bellyBlock);
+    }
+
+    // --- FINS: blocky side fins ---
+    const finMat = new THREE.MeshLambertMaterial({ color: darkOlive });
+    // Left pectoral fin
+    const finL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.08, 0.5), finMat);
+    finL.position.set(-0.9, -0.3, -0.5);
+    finL.rotation.z = -0.3;
+    finL.name = 'finL';
+    group.add(finL);
+    // Right pectoral fin
+    const finR = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.08, 0.5), finMat);
+    finR.position.set(0.9, -0.3, -0.5);
+    finR.rotation.z = 0.3;
+    finR.name = 'finR';
+    group.add(finR);
+
+    // Dorsal fin (top)
+    const dorsalFin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.6), finMat);
+    dorsalFin.position.set(0, 0.6, -0.3);
+    group.add(dorsalFin);
+
+    // --- TAIL: blocky v-shape ---
+    const tailBase = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.6), finMat);
+    tailBase.position.set(0, -0.1, segCount * 0.65 + 0.2);
+    tailBase.name = 'tail';
+    group.add(tailBase);
+
+    const tailFinUp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.4), finMat);
+    tailFinUp.position.set(0, 0.2, segCount * 0.65 + 0.5);
+    tailFinUp.rotation.x = -0.3;
+    tailFinUp.name = 'tailFin';
+    group.add(tailFinUp);
+
+    const tailFinDown = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.35), finMat);
+    tailFinDown.position.set(0, -0.35, segCount * 0.65 + 0.5);
+    tailFinDown.rotation.x = 0.3;
+    group.add(tailFinDown);
 
     return group;
 }
