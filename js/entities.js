@@ -1021,9 +1021,9 @@ export class EntityManager {
         this.spawnCheckTimer = 0;
         this.bloopSpawnTimer = 0;
         this.meowlSpawnTimer = 0;
-        this.maxCliones = 30;
-        this.maxBloops = 3;
-        this.maxMeowls = 5;
+        this.maxCliones = 15;
+        this.maxBloops = 2;
+        this.maxMeowls = 3;
     }
 
     spawnClione(x, y, z) {
@@ -1123,134 +1123,125 @@ export class EntityManager {
     }
 
     update(dt, playerX, playerY, playerZ) {
-        // Clione spawn
+        // Spawning
         this.spawnCheckTimer -= dt;
         if (this.spawnCheckTimer <= 0) {
             this.tryNaturalSpawnClione(playerX, playerZ);
-            this.spawnCheckTimer = 3;
+            this.spawnCheckTimer = 5;
         }
-
-        // Meowl spawn
         this.meowlSpawnTimer -= dt;
         if (this.meowlSpawnTimer <= 0) {
             this.tryNaturalSpawnMeowl(playerX, playerZ);
-            this.meowlSpawnTimer = 8 + Math.random() * 8;
+            this.meowlSpawnTimer = 12 + Math.random() * 10;
         }
-
-        // Bloop spawn
         this.bloopSpawnTimer -= dt;
         if (this.bloopSpawnTimer <= 0) {
             this.tryNaturalSpawnBloop(playerX, playerZ);
-            this.bloopSpawnTimer = 10 + Math.random() * 10;
+            this.bloopSpawnTimer = 15 + Math.random() * 15;
         }
 
-        const cliones = this.entities.filter(e => e.type === 'clione' && e.alive && !e.tamed);
-        const majas = this.entities.filter(e => e.type === 'maja' && e.alive && !e.tamed);
+        // Build helper lists without .filter() - reuse arrays
+        const cliones = [];
+        const majas = [];
+        for (let i = 0; i < this.entities.length; i++) {
+            const e = this.entities[i];
+            if (!e.alive || e.tamed) continue;
+            if (e.type === 'clione') cliones.push(e);
+            else if (e.type === 'maja') majas.push(e);
+        }
 
-        for (let i = this.entities.length - 1; i >= 0; i--) {
+        // Clean dead entities first
+        let writeIdx = 0;
+        for (let i = 0; i < this.entities.length; i++) {
             const entity = this.entities[i];
-
             if (!entity.alive) {
                 this.scene.remove(entity.mesh);
-                // Clear attack targets pointing to this entity
-                for (const e of this.entities) {
-                    if (e.attackTarget === entity) e.attackTarget = null;
-                }
-                this.entities.splice(i, 1);
                 continue;
             }
+            this.entities[writeIdx++] = entity;
+        }
+        this.entities.length = writeIdx;
 
-            // --- TAMING LOGIC ---
+        // Clear stale attack targets
+        for (let i = 0; i < this.entities.length; i++) {
+            const e = this.entities[i];
+            if (e.attackTarget && !e.attackTarget.alive) e.attackTarget = null;
+        }
+
+        // Update all entities
+        for (let i = this.entities.length - 1; i >= 0; i--) {
+            const entity = this.entities[i];
             const dx = entity.mesh.position.x - playerX;
             const dy = entity.mesh.position.y - playerY;
             const dz = entity.mesh.position.z - playerZ;
-            const distToPlayer = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const distSq = dx * dx + dy * dy + dz * dz;
+            const distToPlayer = Math.sqrt(distSq);
 
+            // Taming
             if (!entity.tamed) {
-                // Check if player is within tame range
                 if (distToPlayer <= TAME_RANGE) {
                     entity.nearPlayerTime += dt;
                     if (entity.nearPlayerTime >= TAME_TIME) {
                         entity.tamed = true;
                         entity.nearPlayerTime = 0;
-                        // Visual indicator: add green particles/glow
                         this._addTameIndicator(entity);
                     }
                 } else {
-                    entity.nearPlayerTime = Math.max(0, entity.nearPlayerTime - dt * 0.5);
+                    entity.nearPlayerTime = Math.max(0, entity.nearPlayerTime - dt);
                 }
             }
 
-            // --- TAMED BEHAVIOR ---
+            // Tamed behavior
             if (entity.tamed) {
-                // Clear attack target if target is tamed or dead
                 if (entity.attackTarget && (entity.attackTarget.tamed || !entity.attackTarget.alive)) {
                     entity.attackTarget = null;
                 }
-
-                // If has attack target, chase and attack it
                 if (entity.attackTarget && entity.attackTarget.alive) {
-                    const target = entity.attackTarget;
-                    const tdx = target.mesh.position.x - entity.mesh.position.x;
-                    const tdy = target.mesh.position.y - entity.mesh.position.y;
-                    const tdz = target.mesh.position.z - entity.mesh.position.z;
+                    const t = entity.attackTarget.mesh.position;
+                    const tdx = t.x - entity.mesh.position.x;
+                    const tdy = t.y - entity.mesh.position.y;
+                    const tdz = t.z - entity.mesh.position.z;
                     const tDist = Math.sqrt(tdx * tdx + tdy * tdy + tdz * tdz);
-
                     if (tDist > 1.5) {
-                        // Chase
-                        const speed = 5.0;
-                        entity.velocity.x = (tdx / tDist) * speed;
-                        entity.velocity.y = (tdy / tDist) * speed;
-                        entity.velocity.z = (tdz / tDist) * speed;
+                        const s = 5.0 / tDist;
+                        entity.velocity.set(tdx * s, tdy * s, tdz * s);
                     } else {
-                        // Attack - kill the target
-                        target.alive = false;
+                        entity.attackTarget.alive = false;
                         entity.attackTarget = null;
                     }
-                }
-                // Follow player if beyond follow distance and not attacking
-                else if (distToPlayer > FOLLOW_DIST) {
-                    const speed = 5.0;
-                    entity.velocity.x = (-dx / distToPlayer) * speed;
-                    entity.velocity.y = (-dy / distToPlayer) * speed;
-                    entity.velocity.z = (-dz / distToPlayer) * speed;
+                } else if (distToPlayer > FOLLOW_DIST) {
+                    const s = 5.0 / distToPlayer;
+                    entity.velocity.set(-dx * s, -dy * s, -dz * s);
                 }
             }
 
-            // --- NORMAL UPDATE ---
+            // Movement
             if (entity.tamed && (entity.attackTarget || distToPlayer > FOLLOW_DIST)) {
-                // Tamed movement override: just move by velocity
                 entity.mesh.position.x += entity.velocity.x * dt;
                 entity.mesh.position.y += entity.velocity.y * dt;
                 entity.mesh.position.z += entity.velocity.z * dt;
-                // Face direction
                 if (Math.abs(entity.velocity.x) > 0.01 || Math.abs(entity.velocity.z) > 0.01) {
                     const targetYaw = Math.atan2(entity.velocity.x, entity.velocity.z) + Math.PI;
                     let diff = targetYaw - entity.mesh.rotation.y;
-                    while (diff > Math.PI) diff -= Math.PI * 2;
-                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    if (diff > Math.PI) diff -= Math.PI * 2;
+                    if (diff < -Math.PI) diff += Math.PI * 2;
                     entity.mesh.rotation.y += diff * dt * 3;
                 }
             } else {
-                // Normal AI
-                if (entity.type === 'maja' && !entity.tamed) {
-                    entity.update(dt, this.world, cliones);
-                } else if (entity.type === 'bloop' && !entity.tamed) {
-                    entity.update(dt, this.world, cliones, majas);
-                } else if (entity.type === 'meowl') {
-                    entity.update(dt);
-                } else {
-                    entity.update(dt, this.world);
-                }
+                if (entity.type === 'maja' && !entity.tamed) entity.update(dt, this.world, cliones);
+                else if (entity.type === 'bloop' && !entity.tamed) entity.update(dt, this.world, cliones, majas);
+                else if (entity.type === 'meowl') entity.update(dt);
+                else entity.update(dt, this.world);
             }
 
-            // Don't despawn tamed mobs
+            // Despawn (not tamed)
             if (!entity.tamed) {
-                const hDist = dx * dx + dz * dz;
-                const maxDist = (entity.type === 'maja' || entity.type === 'bloop') ? 120 : (entity.type === 'meowl' ? 100 : 80);
-                if (hDist > maxDist * maxDist) {
+                const hDistSq = dx * dx + dz * dz;
+                const maxD = (entity.type === 'maja' || entity.type === 'bloop') ? 100 : 60;
+                if (hDistSq > maxD * maxD) {
                     this.scene.remove(entity.mesh);
-                    this.entities.splice(i, 1);
+                    this.entities[i] = this.entities[this.entities.length - 1];
+                    this.entities.pop();
                 }
             }
         }

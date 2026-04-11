@@ -13,7 +13,7 @@ export class World {
         this.blockMaterials = blockMaterials;
         this.chunks = new Map();
         this.noise = new SimplexNoise(seed);
-        this.renderDistance = 4;
+        this.renderDistance = 3;
     }
 
     getChunkKey(cx, cz) {
