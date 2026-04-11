@@ -149,7 +149,7 @@ let interactCooldown = 0;
 let threatTimer = 0;
 let threatTarget = null;
 const THREAT_RANGE = 9;
-const THREAT_TIME = 3;
+const THREAT_TIME = 2;
 
 // ---- 게임 루프 ----
 let lastTime = 0;
