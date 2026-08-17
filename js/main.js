@@ -145,12 +145,6 @@ let frameCount = 0, lastFpsTime = 0;
 // ---- 블록 상호작용 쿨다운 ----
 let interactCooldown = 0;
 
-// ---- 물블록 위협 시스템 ----
-let threatTimer = 0;
-let threatTarget = null;
-const THREAT_RANGE = 9;
-const THREAT_TIME = 2;
-
 // ---- 게임 루프 ----
 let lastTime = 0;
 let started = false;
@@ -175,8 +169,8 @@ function gameLoop(time) {
 
     world.update(player.position.x, player.position.z);
 
-    // 엔티티 업데이트 (자연 스폰 + 길들이기 포함)
-    entityManager.update(dt, player.position.x, player.position.y, player.position.z);
+    // 엔티티 업데이트
+    entityManager.update(dt, player.position.x, player.position.z);
 
     // 블록 상호작용
     interactCooldown -= dt;
@@ -193,21 +187,9 @@ function gameLoop(time) {
     if (interactCooldown <= 0) {
         const currentItem = HOTBAR_ITEMS[selectedSlot];
 
-        if (clicks.leftClick) {
-            // 먼저 몹 타겟팅 확인 (시선 방향의 몹을 터치하면 길들여진 몹이 공격)
-            let targetEntity = null;
-            for (let d = 1; d <= 12; d += 1.5) {
-                const checkPos = player.camera.position.clone().add(dir.clone().multiplyScalar(d));
-                targetEntity = entityManager.findEntityAt(checkPos, 2.5);
-                if (targetEntity) break;
-            }
-            if (targetEntity && !targetEntity.tamed && targetEntity.alive) {
-                entityManager.commandAttack(targetEntity);
-                interactCooldown = 0.5;
-            } else if (hit) {
-                world.setBlock(hit.x, hit.y, hit.z, BlockType.AIR);
-                interactCooldown = 0.25;
-            }
+        if (clicks.leftClick && hit) {
+            world.setBlock(hit.x, hit.y, hit.z, BlockType.AIR);
+            interactCooldown = 0.25;
         }
         if (clicks.rightClick && hit && hit.placeX !== undefined) {
             if (currentItem === SPAWN_EGG_CLIONE) {
@@ -235,77 +217,6 @@ function gameLoop(time) {
 
     // 비행 상태
     flyStatusEl.textContent = player.flying ? '비행 중' : '걷기';
-
-    // ---- 물블록 위협 시스템: 물블록 들고 있으면 근처 야생 몹에 빨간 바 ----
-    const currentHeld = HOTBAR_ITEMS[selectedSlot];
-    const holdingWater = currentHeld === BlockType.WATER;
-    const threatBar = document.getElementById('threat-bar');
-    const threatBarFill = document.getElementById('threat-bar-fill');
-
-    if (holdingWater) {
-        // 가장 가까운 길들이지 않은 몹 찾기
-        let nearestWild = null;
-        let nearestDist = THREAT_RANGE;
-        for (const e of entityManager.entities) {
-            if (e.tamed || !e.alive) continue;
-            const dx = e.mesh.position.x - player.position.x;
-            const dy = e.mesh.position.y - player.position.y;
-            const dz = e.mesh.position.z - player.position.z;
-            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (dist < nearestDist) {
-                nearestDist = dist;
-                nearestWild = e;
-            }
-        }
-
-        if (nearestWild) {
-            if (threatTarget !== nearestWild) {
-                threatTarget = nearestWild;
-                threatTimer = 0;
-            }
-            threatTimer += dt;
-            threatBar.style.display = 'block';
-            const pct = Math.min(100, (threatTimer / THREAT_TIME) * 100);
-            threatBarFill.style.width = pct + '%';
-
-            if (threatTimer >= THREAT_TIME) {
-                // 길들인 몹들이 공격
-                entityManager.commandAttack(threatTarget);
-                threatTimer = 0;
-                threatTarget = null;
-            }
-        } else {
-            threatTimer = 0;
-            threatTarget = null;
-            threatBar.style.display = 'none';
-        }
-    } else {
-        threatTimer = 0;
-        threatTarget = null;
-        threatBar.style.display = 'none';
-    }
-
-    // 길들이기 진행률 표시
-    const tameBar = document.getElementById('tame-bar');
-    const tameBarFill = document.getElementById('tame-bar-fill');
-    let tamingEntity = null;
-    for (const e of entityManager.entities) {
-        if (!e.tamed && e.alive && e.nearPlayerTime > 0) {
-            tamingEntity = e;
-            break;
-        }
-    }
-    if (tamingEntity) {
-        tameBar.style.display = 'block';
-        const pct = Math.min(100, (tamingEntity.nearPlayerTime / 3) * 100);
-        tameBarFill.style.width = pct + '%';
-    } else {
-        tameBar.style.display = 'none';
-    }
-
-    // 길들여진 몹 수
-    const tamedCount = entityManager.entities.filter(e => e.tamed && e.alive).length;
-    document.getElementById('tame-count').textContent = tamedCount > 0 ? `길들인 몹: ${tamedCount}마리` : '';
 
     renderer.render(scene, camera);
 }
