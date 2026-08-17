@@ -1001,7 +1001,7 @@ export class EntityManager {
         this.spawnCheckTimer = 0;
         this.bloopSpawnTimer = 0;
         this.meowlSpawnTimer = 0;
-        this.maxCliones = 15;
+        this.maxCliones = 12;
         this.maxBloops = 2;
         this.maxMeowls = 3;
     }
@@ -1028,11 +1028,12 @@ export class EntityManager {
     }
 
     tryNaturalSpawnClione(playerX, playerZ) {
-        const clionesCount = this.entities.filter(e => e.type === 'clione' && e.alive).length;
-        if (clionesCount >= this.maxCliones) return;
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'clione' && e.alive) count++;
+        if (count >= this.maxCliones) return;
 
         const angle = Math.random() * Math.PI * 2;
-        const dist = 20 + Math.random() * 20;
+        const dist = 10 + Math.random() * 20;
         const sx = Math.floor(playerX + Math.cos(angle) * dist);
         const sz = Math.floor(playerZ + Math.sin(angle) * dist);
 
@@ -1045,11 +1046,12 @@ export class EntityManager {
     }
 
     tryNaturalSpawnBloop(playerX, playerZ) {
-        const bloopCount = this.entities.filter(e => e.type === 'bloop' && e.alive).length;
-        if (bloopCount >= this.maxBloops) return;
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'bloop' && e.alive) count++;
+        if (count >= this.maxBloops) return;
 
         const angle = Math.random() * Math.PI * 2;
-        const dist = 30 + Math.random() * 25;
+        const dist = 15 + Math.random() * 20;
         const sx = Math.floor(playerX + Math.cos(angle) * dist);
         const sz = Math.floor(playerZ + Math.sin(angle) * dist);
 
@@ -1062,14 +1064,15 @@ export class EntityManager {
     }
 
     tryNaturalSpawnMeowl(playerX, playerZ) {
-        const meowlCount = this.entities.filter(e => e.type === 'meowl' && e.alive).length;
-        if (meowlCount >= this.maxMeowls) return;
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'meowl' && e.alive) count++;
+        if (count >= this.maxMeowls) return;
 
         const angle = Math.random() * Math.PI * 2;
-        const dist = 25 + Math.random() * 30;
+        const dist = 15 + Math.random() * 20;
         const sx = playerX + Math.cos(angle) * dist;
         const sz = playerZ + Math.sin(angle) * dist;
-        const sy = 35 + Math.random() * 15; // sky height
+        const sy = 30 + Math.random() * 15;
 
         const meowl = new Meowl(sx, sy, sz);
         this.entities.push(meowl);
@@ -1080,17 +1083,17 @@ export class EntityManager {
         this.spawnCheckTimer -= dt;
         if (this.spawnCheckTimer <= 0) {
             this.tryNaturalSpawnClione(playerX, playerZ);
-            this.spawnCheckTimer = 5;
+            this.spawnCheckTimer = 2;
         }
         this.meowlSpawnTimer -= dt;
         if (this.meowlSpawnTimer <= 0) {
             this.tryNaturalSpawnMeowl(playerX, playerZ);
-            this.meowlSpawnTimer = 12 + Math.random() * 10;
+            this.meowlSpawnTimer = 6 + Math.random() * 6;
         }
         this.bloopSpawnTimer -= dt;
         if (this.bloopSpawnTimer <= 0) {
             this.tryNaturalSpawnBloop(playerX, playerZ);
-            this.bloopSpawnTimer = 15 + Math.random() * 15;
+            this.bloopSpawnTimer = 10 + Math.random() * 10;
         }
 
         const cliones = [];
@@ -1122,7 +1125,7 @@ export class EntityManager {
 
             const dx = entity.mesh.position.x - playerX;
             const dz = entity.mesh.position.z - playerZ;
-            const maxD = (entity.type === 'maja' || entity.type === 'bloop') ? 100 : 60;
+            const maxD = (entity.type === 'maja' || entity.type === 'bloop') ? 80 : (entity.type === 'meowl' ? 80 : 50);
             if (dx * dx + dz * dz > maxD * maxD) {
                 this.scene.remove(entity.mesh);
                 this.entities[i] = this.entities[this.entities.length - 1];
