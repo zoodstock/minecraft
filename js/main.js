@@ -56,11 +56,13 @@ const input = new InputHandler(canvas);
 // ---- 핫바 아이템 정의 (블록 + 생성알) ----
 const SPAWN_EGG_CLIONE = 'spawn_clione';
 const SPAWN_EGG_MAJA = 'spawn_maja';
+const ITEM_BLACK_SKULL = 'black_skull';
 
 const HOTBAR_ITEMS = [
     ...PLACEABLE_BLOCKS,
     SPAWN_EGG_CLIONE,
     SPAWN_EGG_MAJA,
+    ITEM_BLACK_SKULL,
 ];
 
 const ITEM_NAMES_KO = {
@@ -71,8 +73,10 @@ const ITEM_NAMES_KO = {
     [BlockType.LEAVES]: '나뭇잎',
     [BlockType.SAND]: '모래',
     [BlockType.WATER]: '물',
+    [BlockType.SOUL_DIRT]: '영혼의 흙',
     [SPAWN_EGG_CLIONE]: '클리오네 생성알',
     [SPAWN_EGG_MAJA]: '엘 그란 마하 생성알',
+    [ITEM_BLACK_SKULL]: '검은 해골',
 };
 
 const ITEM_COLORS = {
@@ -83,8 +87,10 @@ const ITEM_COLORS = {
     [BlockType.LEAVES]: '#228b22',
     [BlockType.SAND]: '#d2b48c',
     [BlockType.WATER]: '#1e90ff',
+    [BlockType.SOUL_DIRT]: '#3c2820',
     [SPAWN_EGG_CLIONE]: null,
     [SPAWN_EGG_MAJA]: null,
+    [ITEM_BLACK_SKULL]: null,
 };
 
 // ---- 핫바 UI ----
@@ -109,6 +115,9 @@ function buildHotbar() {
         } else if (item === SPAWN_EGG_MAJA) {
             preview.style.background = 'radial-gradient(ellipse at 40% 40%, #2a2a60 0%, #1a1a40 50%, #40ffcc 100%)';
             preview.style.borderRadius = '40% 40% 50% 50%';
+        } else if (item === ITEM_BLACK_SKULL) {
+            preview.style.background = 'radial-gradient(circle at 50% 40%, #333 0%, #111 60%, #000 100%)';
+            preview.style.borderRadius = '30% 30% 40% 40%';
         } else {
             preview.style.background = ITEM_COLORS[item] || '#888';
         }

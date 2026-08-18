@@ -10,6 +10,7 @@ export const BlockType = {
     LEAVES: 5,
     SAND: 6,
     WATER: 7,
+    SOUL_DIRT: 8,
 };
 
 export const BLOCK_NAMES = {
@@ -24,7 +25,8 @@ export const BLOCK_NAMES = {
 
 export const PLACEABLE_BLOCKS = [
     BlockType.GRASS, BlockType.DIRT, BlockType.STONE,
-    BlockType.WOOD, BlockType.LEAVES, BlockType.SAND, BlockType.WATER
+    BlockType.WOOD, BlockType.LEAVES, BlockType.SAND, BlockType.WATER,
+    BlockType.SOUL_DIRT
 ];
 
 // Generate procedural textures using canvas
@@ -101,6 +103,18 @@ export function createBlockTextures() {
     textures[BlockType.LEAVES] = { top: leaves, bottom: leaves, side: leaves };
     textures[BlockType.SAND] = { top: sand, bottom: sand, side: sand };
     textures[BlockType.WATER] = { top: water, bottom: water, side: water };
+
+    // Soul Dirt - dark brown with ghostly face patterns
+    const soulDirt = createTexture((ctx, s) => {
+        addNoise(ctx, s, [60, 40, 30], 12);
+        // ghostly face marks
+        ctx.fillStyle = 'rgba(90, 70, 50, 0.6)';
+        ctx.fillRect(4, 4, 2, 2);
+        ctx.fillRect(10, 4, 2, 2);
+        ctx.fillRect(5, 8, 6, 1);
+        ctx.fillRect(6, 9, 4, 1);
+    });
+    textures[BlockType.SOUL_DIRT] = { top: soulDirt, bottom: soulDirt, side: soulDirt };
 
     return textures;
 }
