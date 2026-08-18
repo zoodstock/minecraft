@@ -1077,9 +1077,10 @@ class Wither {
         this.dirChangeTimer = 2 + Math.random() * 3;
         this.alive = true;
         this.huntTarget = null;
+        this.tamed = false;
     }
 
-    update(dt, world, allMobs) {
+    update(dt, world, allMobs, playerX, playerY, playerZ) {
         if (!this.alive) return;
         this.time += dt;
 
@@ -1094,39 +1095,58 @@ class Wither {
         const myPos = this.mesh.position;
         const speed = 2.0;
 
-        // Hunt nearest non-wither mob
-        this.huntTarget = null;
-        let nearestDist = 20;
-        for (const m of allMobs) {
-            if (!m.alive || m.type === 'wither') continue;
-            const dx = m.mesh.position.x - myPos.x;
-            const dy = m.mesh.position.y - myPos.y;
-            const dz = m.mesh.position.z - myPos.z;
-            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (dist < nearestDist) {
-                nearestDist = dist;
-                this.huntTarget = m;
-            }
-        }
-
-        if (this.huntTarget) {
-            const t = this.huntTarget.mesh.position;
-            const dx = t.x - myPos.x, dy = t.y - myPos.y, dz = t.z - myPos.z;
-            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (dist > 1.5) {
-                const s = speed / dist;
-                this.velocity.set(dx * s, dy * s, dz * s);
+        if (this.tamed) {
+            // Follow player if far
+            const pdx = playerX - myPos.x, pdy = playerY - myPos.y, pdz = playerZ - myPos.z;
+            const pDist = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz);
+            if (pDist > 12) {
+                const s = 4.0 / pDist;
+                this.velocity.set(pdx * s, pdy * s, pdz * s);
             } else {
-                this.huntTarget.alive = false;
-                this.huntTarget = null;
+                // Idle near player
+                this.dirChangeTimer -= dt;
+                if (this.dirChangeTimer <= 0) {
+                    this.velocity.x = (Math.random() - 0.5) * 0.8;
+                    this.velocity.z = (Math.random() - 0.5) * 0.8;
+                    this.velocity.y = (Math.random() - 0.5) * 0.3;
+                    this.dirChangeTimer = 2 + Math.random() * 3;
+                }
             }
         } else {
-            this.dirChangeTimer -= dt;
-            if (this.dirChangeTimer <= 0) {
-                this.velocity.x = (Math.random() - 0.5) * 1.5;
-                this.velocity.z = (Math.random() - 0.5) * 1.5;
-                this.velocity.y = (Math.random() - 0.5) * 0.5;
-                this.dirChangeTimer = 2 + Math.random() * 3;
+            // Hunt nearest non-wither mob
+            this.huntTarget = null;
+            let nearestDist = 20;
+            for (const m of allMobs) {
+                if (!m.alive || m.type === 'wither') continue;
+                const dx = m.mesh.position.x - myPos.x;
+                const dy = m.mesh.position.y - myPos.y;
+                const dz = m.mesh.position.z - myPos.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    this.huntTarget = m;
+                }
+            }
+
+            if (this.huntTarget) {
+                const t = this.huntTarget.mesh.position;
+                const dx = t.x - myPos.x, dy = t.y - myPos.y, dz = t.z - myPos.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist > 1.5) {
+                    const s = speed / dist;
+                    this.velocity.set(dx * s, dy * s, dz * s);
+                } else {
+                    this.huntTarget.alive = false;
+                    this.huntTarget = null;
+                }
+            } else {
+                this.dirChangeTimer -= dt;
+                if (this.dirChangeTimer <= 0) {
+                    this.velocity.x = (Math.random() - 0.5) * 1.5;
+                    this.velocity.z = (Math.random() - 0.5) * 1.5;
+                    this.velocity.y = (Math.random() - 0.5) * 0.5;
+                    this.dirChangeTimer = 2 + Math.random() * 3;
+                }
             }
         }
 
@@ -1247,7 +1267,7 @@ export class EntityManager {
         this.scene.add(meowl.mesh);
     }
 
-    update(dt, playerX, playerZ) {
+    update(dt, playerX, playerY, playerZ) {
         this.spawnCheckTimer -= dt;
         if (this.spawnCheckTimer <= 0) {
             this.tryNaturalSpawnClione(playerX, playerZ);
@@ -1288,7 +1308,7 @@ export class EntityManager {
 
             if (entity.type === 'maja') entity.update(dt, this.world, cliones);
             else if (entity.type === 'bloop') entity.update(dt, this.world, cliones, majas);
-            else if (entity.type === 'wither') entity.update(dt, this.world, this.entities);
+            else if (entity.type === 'wither') entity.update(dt, this.world, this.entities, playerX, playerY, playerZ);
             else if (entity.type === 'meowl') entity.update(dt);
             else entity.update(dt, this.world);
 

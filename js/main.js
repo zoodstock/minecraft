@@ -211,7 +211,7 @@ function gameLoop(time) {
     world.update(player.position.x, player.position.z);
 
     // 엔티티 업데이트
-    entityManager.update(dt, player.position.x, player.position.z);
+    entityManager.update(dt, player.position.x, player.position.y, player.position.z);
 
     // 블록 상호작용
     interactCooldown -= dt;
@@ -232,14 +232,44 @@ function gameLoop(time) {
             world.setBlock(hit.x, hit.y, hit.z, BlockType.AIR);
             interactCooldown = 0.25;
         }
-        if (clicks.rightClick && hit && hit.placeX !== undefined) {
-            if (currentItem === SPAWN_EGG_CLIONE) {
-                entityManager.spawnClione(hit.placeX, hit.placeY, hit.placeZ);
-                interactCooldown = 0.25;
-            } else if (currentItem === SPAWN_EGG_MAJA) {
-                entityManager.spawnMaja(hit.placeX, hit.placeY, hit.placeZ);
-                interactCooldown = 0.25;
-            } else if (currentItem === ITEM_BLACK_SKULL) {
+        if (clicks.rightClick) {
+            // 생성알로 위더 길들이기: 시선 방향의 위더를 찾아서 길들임
+            if (currentItem === SPAWN_EGG_CLIONE || currentItem === SPAWN_EGG_MAJA) {
+                let tamedWither = false;
+                for (let d = 1; d <= 10; d += 1) {
+                    const checkPos = player.camera.position.clone().add(dir.clone().multiplyScalar(d));
+                    for (const e of entityManager.entities) {
+                        if (e.type !== 'wither' || !e.alive || e.tamed) continue;
+                        const dx = e.mesh.position.x - checkPos.x;
+                        const dy = e.mesh.position.y - checkPos.y;
+                        const dz = e.mesh.position.z - checkPos.z;
+                        if (dx*dx + dy*dy + dz*dz < 4) {
+                            e.tamed = true;
+                            // 초록 표시 추가
+                            const indicator = new THREE.Mesh(
+                                new THREE.BoxGeometry(0.2 * e.scale, 0.2 * e.scale, 0.2 * e.scale),
+                                new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+                            );
+                            indicator.position.set(0, 0.9 * e.scale, 0);
+                            indicator.rotation.set(Math.PI/4, Math.PI/4, 0);
+                            e.mesh.add(indicator);
+                            tamedWither = true;
+                            interactCooldown = 0.5;
+                            break;
+                        }
+                    }
+                    if (tamedWither) break;
+                }
+                // 위더를 못 찾으면 일반 스폰
+                if (!tamedWither && hit && hit.placeX !== undefined) {
+                    if (currentItem === SPAWN_EGG_CLIONE) {
+                        entityManager.spawnClione(hit.placeX, hit.placeY, hit.placeZ);
+                    } else {
+                        entityManager.spawnMaja(hit.placeX, hit.placeY, hit.placeZ);
+                    }
+                    interactCooldown = 0.25;
+                }
+            } else if (hit && hit.placeX !== undefined && currentItem === ITEM_BLACK_SKULL) {
                 // 검은 해골을 영혼의 흙 위에 놓으면 위더 소환
                 if (hit.block === BlockType.SOUL_DIRT) {
                     const count = countConnectedSoulDirt(hit.x, hit.y, hit.z);
@@ -249,7 +279,7 @@ function gameLoop(time) {
                     entityManager.spawnWither(hit.x, hit.y + 1, hit.z, scale);
                     interactCooldown = 0.5;
                 }
-            } else {
+            } else if (hit && hit.placeX !== undefined) {
                 world.setBlock(hit.placeX, hit.placeY, hit.placeZ, currentItem);
                 interactCooldown = 0.25;
             }
