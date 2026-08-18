@@ -143,6 +143,38 @@ document.addEventListener('keydown', (e) => {
 
 buildHotbar();
 
+// ---- 영혼의 흙 연결 계산 (BFS) ----
+function countConnectedSoulDirt(sx, sy, sz) {
+    const visited = new Set();
+    const queue = [[sx, sy, sz]];
+    let count = 0;
+    while (queue.length > 0) {
+        const [x, y, z] = queue.shift();
+        const key = `${x},${y},${z}`;
+        if (visited.has(key)) continue;
+        if (world.getBlock(x, y, z) !== BlockType.SOUL_DIRT) continue;
+        visited.add(key);
+        count++;
+        if (count > 20) break;
+        queue.push([x+1,y,z],[x-1,y,z],[x,y+1,z],[x,y-1,z],[x,y,z+1],[x,y,z-1]);
+    }
+    return count;
+}
+
+function removeConnectedSoulDirt(sx, sy, sz) {
+    const visited = new Set();
+    const queue = [[sx, sy, sz]];
+    while (queue.length > 0) {
+        const [x, y, z] = queue.shift();
+        const key = `${x},${y},${z}`;
+        if (visited.has(key)) continue;
+        if (world.getBlock(x, y, z) !== BlockType.SOUL_DIRT) continue;
+        visited.add(key);
+        world.setBlock(x, y, z, BlockType.AIR);
+        queue.push([x+1,y,z],[x-1,y,z],[x,y+1,z],[x,y-1,z],[x,y,z+1],[x,y,z-1]);
+    }
+}
+
 // ---- 비행 상태 표시 ----
 const flyStatusEl = document.getElementById('fly-status');
 
@@ -207,6 +239,16 @@ function gameLoop(time) {
             } else if (currentItem === SPAWN_EGG_MAJA) {
                 entityManager.spawnMaja(hit.placeX, hit.placeY, hit.placeZ);
                 interactCooldown = 0.25;
+            } else if (currentItem === ITEM_BLACK_SKULL) {
+                // 검은 해골을 영혼의 흙 위에 놓으면 위더 소환
+                if (hit.block === BlockType.SOUL_DIRT) {
+                    const count = countConnectedSoulDirt(hit.x, hit.y, hit.z);
+                    const scale = 0.8 + count * 0.3;
+                    // 연결된 영혼의 흙 제거
+                    removeConnectedSoulDirt(hit.x, hit.y, hit.z);
+                    entityManager.spawnWither(hit.x, hit.y + 1, hit.z, scale);
+                    interactCooldown = 0.5;
+                }
             } else {
                 world.setBlock(hit.placeX, hit.placeY, hit.placeZ, currentItem);
                 interactCooldown = 0.25;

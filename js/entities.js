@@ -990,6 +990,167 @@ class Meowl {
 }
 
 // ============================================================
+// Wither - summoned by placing Black Skull on Soul Dirt
+// Size scales with connected Soul Dirt blocks. Flies, hostile to all mobs.
+// ============================================================
+
+function createWitherMesh(scale) {
+    const group = new THREE.Group();
+    const dark = 0x1a1a1a;
+    const bone = 0x2a2a2a;
+    const eye = 0xccff00;
+    const s = scale;
+
+    // Center head
+    const headGeo = new THREE.BoxGeometry(0.6 * s, 0.6 * s, 0.6 * s);
+    const headMat = new THREE.MeshLambertMaterial({ color: dark });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 0.5 * s, 0);
+    group.add(head);
+
+    // Center eyes (glowing yellow)
+    const eyeMat = new THREE.MeshBasicMaterial({ color: eye });
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.12 * s, 0.1 * s, 0.05 * s), eyeMat);
+    eyeL.position.set(-0.15 * s, 0.55 * s, -0.32 * s);
+    group.add(eyeL);
+    const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.12 * s, 0.1 * s, 0.05 * s), eyeMat);
+    eyeR.position.set(0.15 * s, 0.55 * s, -0.32 * s);
+    group.add(eyeR);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.2 * s, 0.06 * s, 0.05 * s), eyeMat);
+    mouth.position.set(0, 0.38 * s, -0.32 * s);
+    group.add(mouth);
+
+    // Left head
+    const headL = new THREE.Mesh(new THREE.BoxGeometry(0.45 * s, 0.45 * s, 0.45 * s), headMat);
+    headL.position.set(-0.6 * s, 0.3 * s, 0);
+    group.add(headL);
+    const eyeLL = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.08 * s, 0.05 * s), eyeMat);
+    eyeLL.position.set(-0.7 * s, 0.35 * s, -0.25 * s);
+    group.add(eyeLL);
+    const eyeLR = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.08 * s, 0.05 * s), eyeMat);
+    eyeLR.position.set(-0.5 * s, 0.35 * s, -0.25 * s);
+    group.add(eyeLR);
+
+    // Right head
+    const headR = new THREE.Mesh(new THREE.BoxGeometry(0.45 * s, 0.45 * s, 0.45 * s), headMat);
+    headR.position.set(0.6 * s, 0.3 * s, 0);
+    group.add(headR);
+    const eyeRL = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.08 * s, 0.05 * s), eyeMat);
+    eyeRL.position.set(0.5 * s, 0.35 * s, -0.25 * s);
+    group.add(eyeRL);
+    const eyeRR = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.08 * s, 0.05 * s), eyeMat);
+    eyeRR.position.set(0.7 * s, 0.35 * s, -0.25 * s);
+    group.add(eyeRR);
+
+    // Spine / ribcage
+    const spineMat = new THREE.MeshLambertMaterial({ color: bone });
+    for (let i = 0; i < 5; i++) {
+        const ribW = (0.8 - i * 0.1) * s;
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(ribW, 0.15 * s, 0.2 * s), spineMat);
+        rib.position.set(0, -i * 0.25 * s, 0);
+        rib.name = `rib${i}`;
+        group.add(rib);
+    }
+
+    // Tail (tapered)
+    const tailGeo = new THREE.BoxGeometry(0.15 * s, 0.15 * s, 0.4 * s);
+    const tail = new THREE.Mesh(tailGeo, spineMat);
+    tail.position.set(0, -1.3 * s, 0.1 * s);
+    tail.name = 'tail';
+    group.add(tail);
+
+    return group;
+}
+
+class Wither {
+    constructor(x, y, z, scale) {
+        this.type = 'wither';
+        this.scale = scale;
+        this.mesh = createWitherMesh(scale);
+        this.mesh.position.set(x, y + 1, z);
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 1.5,
+            0.5,
+            (Math.random() - 0.5) * 1.5
+        );
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 2 + Math.random() * 3;
+        this.alive = true;
+        this.huntTarget = null;
+    }
+
+    update(dt, world, allMobs) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Rib wave animation
+        for (let i = 0; i < 5; i++) {
+            const rib = this.mesh.getObjectByName(`rib${i}`);
+            if (rib) rib.position.x = Math.sin(this.time * 3 + i * 0.8) * 0.05 * this.scale;
+        }
+        const tail = this.mesh.getObjectByName('tail');
+        if (tail) tail.rotation.y = Math.sin(this.time * 2.5) * 0.4;
+
+        const myPos = this.mesh.position;
+        const speed = 2.0;
+
+        // Hunt nearest non-wither mob
+        this.huntTarget = null;
+        let nearestDist = 20;
+        for (const m of allMobs) {
+            if (!m.alive || m.type === 'wither') continue;
+            const dx = m.mesh.position.x - myPos.x;
+            const dy = m.mesh.position.y - myPos.y;
+            const dz = m.mesh.position.z - myPos.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                this.huntTarget = m;
+            }
+        }
+
+        if (this.huntTarget) {
+            const t = this.huntTarget.mesh.position;
+            const dx = t.x - myPos.x, dy = t.y - myPos.y, dz = t.z - myPos.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist > 1.5) {
+                const s = speed / dist;
+                this.velocity.set(dx * s, dy * s, dz * s);
+            } else {
+                this.huntTarget.alive = false;
+                this.huntTarget = null;
+            }
+        } else {
+            this.dirChangeTimer -= dt;
+            if (this.dirChangeTimer <= 0) {
+                this.velocity.x = (Math.random() - 0.5) * 1.5;
+                this.velocity.z = (Math.random() - 0.5) * 1.5;
+                this.velocity.y = (Math.random() - 0.5) * 0.5;
+                this.dirChangeTimer = 2 + Math.random() * 3;
+            }
+        }
+
+        myPos.x += this.velocity.x * dt;
+        myPos.y += this.velocity.y * dt;
+        myPos.z += this.velocity.z * dt;
+        myPos.y += Math.sin(this.time * 1.2) * 0.02;
+
+        // Stay above ground
+        if (myPos.y < 22) myPos.y = 22;
+        if (myPos.y > 50) myPos.y = 50;
+
+        // Face direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const targetYaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = targetYaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 3;
+        }
+    }
+}
+
+// ============================================================
 // Entity Manager
 // ============================================================
 
@@ -1018,6 +1179,13 @@ export class EntityManager {
         this.entities.push(maja);
         this.scene.add(maja.mesh);
         return maja;
+    }
+
+    spawnWither(x, y, z, scale) {
+        const wither = new Wither(x, y, z, scale);
+        this.entities.push(wither);
+        this.scene.add(wither.mesh);
+        return wither;
     }
 
     spawnBloop(x, y, z) {
@@ -1120,12 +1288,13 @@ export class EntityManager {
 
             if (entity.type === 'maja') entity.update(dt, this.world, cliones);
             else if (entity.type === 'bloop') entity.update(dt, this.world, cliones, majas);
+            else if (entity.type === 'wither') entity.update(dt, this.world, this.entities);
             else if (entity.type === 'meowl') entity.update(dt);
             else entity.update(dt, this.world);
 
             const dx = entity.mesh.position.x - playerX;
             const dz = entity.mesh.position.z - playerZ;
-            const maxD = (entity.type === 'maja' || entity.type === 'bloop') ? 80 : (entity.type === 'meowl' ? 80 : 50);
+            const maxD = (entity.type === 'wither') ? 120 : (entity.type === 'maja' || entity.type === 'bloop') ? 80 : (entity.type === 'meowl' ? 80 : 50);
             if (dx * dx + dz * dz > maxD * maxD) {
                 this.scene.remove(entity.mesh);
                 this.entities[i] = this.entities[this.entities.length - 1];
