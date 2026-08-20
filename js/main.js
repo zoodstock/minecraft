@@ -57,9 +57,11 @@ const input = new InputHandler(canvas);
 const SPAWN_EGG_CLIONE = 'spawn_clione';
 const SPAWN_EGG_MAJA = 'spawn_maja';
 const ITEM_BLACK_SKULL = 'black_skull';
+const ITEM_FIRE = 'fire';
 
 const HOTBAR_ITEMS = [
     ...PLACEABLE_BLOCKS,
+    ITEM_FIRE,
     SPAWN_EGG_CLIONE,
     SPAWN_EGG_MAJA,
     ITEM_BLACK_SKULL,
@@ -74,6 +76,8 @@ const ITEM_NAMES_KO = {
     [BlockType.SAND]: '모래',
     [BlockType.WATER]: '물',
     [BlockType.SOUL_DIRT]: '영혼의 흙',
+    [BlockType.OBSIDIAN]: '흑요석',
+    [ITEM_FIRE]: '불',
     [SPAWN_EGG_CLIONE]: '클리오네 생성알',
     [SPAWN_EGG_MAJA]: '엘 그란 마하 생성알',
     [ITEM_BLACK_SKULL]: '검은 해골',
@@ -88,6 +92,8 @@ const ITEM_COLORS = {
     [BlockType.SAND]: '#d2b48c',
     [BlockType.WATER]: '#1e90ff',
     [BlockType.SOUL_DIRT]: '#3c2820',
+    [BlockType.OBSIDIAN]: '#150a20',
+    [ITEM_FIRE]: null,
     [SPAWN_EGG_CLIONE]: null,
     [SPAWN_EGG_MAJA]: null,
     [ITEM_BLACK_SKULL]: null,
@@ -115,6 +121,9 @@ function buildHotbar() {
         } else if (item === SPAWN_EGG_MAJA) {
             preview.style.background = 'radial-gradient(ellipse at 40% 40%, #2a2a60 0%, #1a1a40 50%, #40ffcc 100%)';
             preview.style.borderRadius = '40% 40% 50% 50%';
+        } else if (item === ITEM_FIRE) {
+            preview.style.background = 'radial-gradient(ellipse at 50% 70%, #ff4400 0%, #ff8800 40%, #ffcc00 80%, #fff 100%)';
+            preview.style.borderRadius = '30% 30% 50% 50%';
         } else if (item === ITEM_BLACK_SKULL) {
             preview.style.background = 'radial-gradient(circle at 50% 40%, #333 0%, #111 60%, #000 100%)';
             preview.style.borderRadius = '30% 30% 40% 40%';
@@ -173,6 +182,62 @@ function removeConnectedSoulDirt(sx, sy, sz) {
         world.setBlock(x, y, z, BlockType.AIR);
         queue.push([x+1,y,z],[x-1,y,z],[x,y+1,z],[x,y-1,z],[x,y,z+1],[x,y,z-1]);
     }
+}
+
+// ---- 네더포탈 생성: 흑요석 프레임 안쪽을 포탈 블록으로 채움 ----
+function tryCreateNetherPortal(ox, oy, oz) {
+    // X-axis portal (흑요석 프레임이 X 방향으로 서있는 경우)
+    if (tryFillPortal(ox, oy, oz, 'x')) return;
+    // Z-axis portal
+    if (tryFillPortal(ox, oy, oz, 'z')) return;
+}
+
+function tryFillPortal(ox, oy, oz, axis) {
+    // 흑요석 블록에서 안쪽 빈 공간을 찾아서 포탈로 채움
+    // 인접한 공기 블록을 찾아 프레임 검증
+    const dirs = axis === 'x'
+        ? [[0,1,0],[0,-1,0],[1,0,0],[-1,0,0]]
+        : [[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+
+    for (const [dx, dy, dz] of dirs) {
+        const ax = ox + dx, ay = oy + dy, az = oz + dz;
+        if (world.getBlock(ax, ay, az) !== BlockType.AIR) continue;
+
+        // 이 빈 공간에서 flood fill로 프레임 안쪽인지 확인
+        const filled = [];
+        const visited = new Set();
+        const queue = [[ax, ay, az]];
+        let valid = true;
+
+        while (queue.length > 0 && valid) {
+            const [x, y, z] = queue.shift();
+            const key = `${x},${y},${z}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+
+            const block = world.getBlock(x, y, z);
+            if (block === BlockType.OBSIDIAN) continue;
+            if (block !== BlockType.AIR && block !== BlockType.NETHER_PORTAL) { valid = false; break; }
+
+            filled.push([x, y, z]);
+            if (filled.length > 40) { valid = false; break; }
+
+            // 프레임 방향에 따라 2D로만 확장
+            if (axis === 'x') {
+                queue.push([x+1,y,z],[x-1,y,z],[x,y+1,z],[x,y-1,z]);
+            } else {
+                queue.push([x,y,z+1],[x,y,z-1],[x,y+1,z],[x,y-1,z]);
+            }
+        }
+
+        if (valid && filled.length >= 2 && filled.length <= 40) {
+            for (const [fx, fy, fz] of filled) {
+                world.setBlock(fx, fy, fz, BlockType.NETHER_PORTAL);
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---- 비행 상태 표시 ----
@@ -277,6 +342,12 @@ function gameLoop(time) {
                     // 연결된 영혼의 흙 제거
                     removeConnectedSoulDirt(hit.x, hit.y, hit.z);
                     entityManager.spawnWither(hit.x, hit.y + 1, hit.z, scale);
+                    interactCooldown = 0.5;
+                }
+            } else if (currentItem === ITEM_FIRE && hit) {
+                // 불을 흑요석에 대면 네더포탈 생성
+                if (hit.block === BlockType.OBSIDIAN) {
+                    tryCreateNetherPortal(hit.x, hit.y, hit.z);
                     interactCooldown = 0.5;
                 }
             } else if (hit && hit.placeX !== undefined) {

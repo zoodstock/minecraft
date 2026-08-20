@@ -11,6 +11,8 @@ export const BlockType = {
     SAND: 6,
     WATER: 7,
     SOUL_DIRT: 8,
+    OBSIDIAN: 9,
+    NETHER_PORTAL: 10,
 };
 
 export const BLOCK_NAMES = {
@@ -26,7 +28,7 @@ export const BLOCK_NAMES = {
 export const PLACEABLE_BLOCKS = [
     BlockType.GRASS, BlockType.DIRT, BlockType.STONE,
     BlockType.WOOD, BlockType.LEAVES, BlockType.SAND, BlockType.WATER,
-    BlockType.SOUL_DIRT
+    BlockType.SOUL_DIRT, BlockType.OBSIDIAN
 ];
 
 // Generate procedural textures using canvas
@@ -116,16 +118,39 @@ export function createBlockTextures() {
     });
     textures[BlockType.SOUL_DIRT] = { top: soulDirt, bottom: soulDirt, side: soulDirt };
 
+    // Obsidian - very dark purple/black with shiny specks
+    const obsidian = createTexture((ctx, s) => {
+        addNoise(ctx, s, [15, 10, 25], 8);
+        for (let i = 0; i < 6; i++) {
+            ctx.fillStyle = 'rgba(80, 50, 120, 0.4)';
+            ctx.fillRect(Math.random() * s | 0, Math.random() * s | 0, 1, 1);
+        }
+    });
+    textures[BlockType.OBSIDIAN] = { top: obsidian, bottom: obsidian, side: obsidian };
+
+    // Nether Portal - purple swirl
+    const portal = createTexture((ctx, s) => {
+        for (let x = 0; x < s; x++) {
+            for (let y = 0; y < s; y++) {
+                const v = Math.sin(x * 0.8 + y * 0.5) * 30;
+                ctx.fillStyle = `rgb(${100 + v},${30 + v * 0.3},${180 + v})`;
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+    });
+    textures[BlockType.NETHER_PORTAL] = { top: portal, bottom: portal, side: portal };
+
     return textures;
 }
 
 // Create materials for each block face
 export function createBlockMaterials(textures) {
     const materials = {};
-    for (const type of PLACEABLE_BLOCKS) {
+    const allRendered = [...PLACEABLE_BLOCKS, BlockType.NETHER_PORTAL];
+    for (const type of allRendered) {
         const tex = textures[type];
-        const transparent = type === BlockType.WATER || type === BlockType.LEAVES;
-        const opacity = type === BlockType.WATER ? 0.7 : (type === BlockType.LEAVES ? 0.9 : 1.0);
+        const transparent = type === BlockType.WATER || type === BlockType.LEAVES || type === BlockType.NETHER_PORTAL;
+        const opacity = type === BlockType.WATER ? 0.7 : (type === BlockType.LEAVES ? 0.9 : (type === BlockType.NETHER_PORTAL ? 0.6 : 1.0));
         materials[type] = {
             top: new THREE.MeshLambertMaterial({ map: tex.top, transparent, opacity }),
             bottom: new THREE.MeshLambertMaterial({ map: tex.bottom, transparent, opacity }),
@@ -136,9 +161,9 @@ export function createBlockMaterials(textures) {
 }
 
 export function isTransparent(blockType) {
-    return blockType === BlockType.AIR || blockType === BlockType.WATER || blockType === BlockType.LEAVES;
+    return blockType === BlockType.AIR || blockType === BlockType.WATER || blockType === BlockType.LEAVES || blockType === BlockType.NETHER_PORTAL;
 }
 
 export function isSolid(blockType) {
-    return blockType !== BlockType.AIR && blockType !== BlockType.WATER;
+    return blockType !== BlockType.AIR && blockType !== BlockType.WATER && blockType !== BlockType.NETHER_PORTAL;
 }
