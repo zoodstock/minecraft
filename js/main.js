@@ -4,6 +4,7 @@ import { Player } from './player.js';
 import { InputHandler } from './input.js';
 import { createBlockTextures, createBlockMaterials, BlockType, BLOCK_NAMES, PLACEABLE_BLOCKS } from './blocks.js';
 import { EntityManager } from './entities.js';
+import { Multiplayer } from './multiplayer.js';
 
 // ---- 설정 ----
 const canvas = document.getElementById('game-canvas');
@@ -290,6 +291,16 @@ function switchDimension() {
     portalCooldown = 3;
 }
 
+// ---- 멀티플레이어 ----
+const mp = new Multiplayer(scene);
+let mpSendTimer = 0;
+
+mp.onBlockChange = (x, y, z, blockType, isRemote) => {
+    if (isRemote) {
+        world.setBlock(x, y, z, blockType);
+    }
+};
+
 // ---- 게임 루프 ----
 let lastTime = 0;
 let started = false;
@@ -349,6 +360,7 @@ function gameLoop(time) {
 
         if (clicks.leftClick && hit) {
             world.setBlock(hit.x, hit.y, hit.z, BlockType.AIR);
+            if (mp.connected) mp.sendBlockChange(hit.x, hit.y, hit.z, BlockType.AIR);
             interactCooldown = 0.25;
         }
         if (clicks.rightClick) {
@@ -406,6 +418,7 @@ function gameLoop(time) {
                 }
             } else if (hit && hit.placeX !== undefined) {
                 world.setBlock(hit.placeX, hit.placeY, hit.placeZ, currentItem);
+                if (mp.connected) mp.sendBlockChange(hit.placeX, hit.placeY, hit.placeZ, currentItem);
                 interactCooldown = 0.25;
             }
         }
@@ -425,16 +438,20 @@ function gameLoop(time) {
     const dimName = world.dimension === 'nether' ? '네더' : '오버월드';
     flyStatusEl.textContent = `${dimName} | ${player.flying ? '비행 중' : '걷기'}`;
 
+    // 멀티플레이어: 위치 전송
+    if (mp.connected) {
+        mpSendTimer += dt;
+        if (mpSendTimer > 0.05) { // 20fps sync
+            mp.sendPosition(player.position.x, player.position.y, player.position.z, player.yaw);
+            mpSendTimer = 0;
+        }
+        document.getElementById('player-count').textContent = `접속: ${mp.getPlayerCount()}명`;
+    }
+
     renderer.render(scene, camera);
 }
 
 // ---- 시작 버튼 ----
-document.getElementById('start-btn').addEventListener('click', startGame);
-document.getElementById('start-btn').addEventListener('touchend', (e) => {
-    e.preventDefault();
-    startGame();
-});
-
 function startGame() {
     started = true;
     document.getElementById('start-screen').style.display = 'none';
@@ -445,6 +462,52 @@ function startGame() {
         canvas.requestPointerLock();
     }
 }
+
+// 혼자 플레이
+document.getElementById('start-solo').addEventListener('click', startGame);
+
+// 방 만들기
+document.getElementById('start-host').addEventListener('click', async () => {
+    document.getElementById('room-info').style.display = 'block';
+    document.getElementById('host-status').textContent = '연결 중...';
+    try {
+        const roomId = await mp.host();
+        document.getElementById('room-code').textContent = roomId;
+        document.getElementById('host-status').textContent = '접속 대기 중... 코드를 공유하세요';
+        document.getElementById('start-host-game').style.display = 'inline-block';
+    } catch (err) {
+        document.getElementById('host-status').textContent = '오류: ' + err.message;
+    }
+});
+
+document.getElementById('start-host-game').addEventListener('click', startGame);
+
+// 코드 복사
+document.getElementById('copy-code').addEventListener('click', () => {
+    const code = document.getElementById('room-code').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        document.getElementById('copy-code').textContent = '복사됨!';
+        setTimeout(() => document.getElementById('copy-code').textContent = '복사', 1500);
+    });
+});
+
+// 방 참가
+document.getElementById('start-join').addEventListener('click', () => {
+    document.getElementById('join-section').style.display = 'block';
+});
+
+document.getElementById('join-btn').addEventListener('click', async () => {
+    const code = document.getElementById('join-code').value.trim();
+    if (!code) return;
+    document.getElementById('join-status').textContent = '접속 중...';
+    try {
+        await mp.join(code);
+        document.getElementById('join-status').textContent = '접속 완료!';
+        setTimeout(startGame, 500);
+    } catch (err) {
+        document.getElementById('join-status').textContent = '접속 실패: ' + err.message;
+    }
+});
 
 // ---- 리사이즈 ----
 window.addEventListener('resize', () => {
