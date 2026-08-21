@@ -5,6 +5,7 @@ import { InputHandler } from './input.js';
 import { createBlockTextures, createBlockMaterials, BlockType, BLOCK_NAMES, PLACEABLE_BLOCKS } from './blocks.js';
 import { EntityManager } from './entities.js';
 import { Multiplayer } from './multiplayer.js';
+import { AIPlayer } from './aiplayer.js';
 
 // ---- 설정 ----
 const canvas = document.getElementById('game-canvas');
@@ -289,6 +290,19 @@ function switchDimension() {
     player.velocity.set(0, 0, 0);
     world.update(0, 0);
     portalCooldown = 3;
+
+    // AI 플레이어 재생성
+    for (const ai of aiPlayers) ai.destroy();
+    aiPlayers.length = 0;
+    for (let i = 0; i < 3; i++) {
+        aiPlayers.push(new AIPlayer(scene, world, i));
+    }
+}
+
+// ---- AI 플레이어 ----
+const aiPlayers = [];
+for (let i = 0; i < 3; i++) {
+    aiPlayers.push(new AIPlayer(scene, world, i));
 }
 
 // ---- 멀티플레이어 ----
@@ -342,6 +356,11 @@ function gameLoop(time) {
 
     // 엔티티 업데이트
     entityManager.update(dt, player.position.x, player.position.y, player.position.z);
+
+    // AI 플레이어 업데이트
+    for (const ai of aiPlayers) {
+        ai.update(dt, player.position);
+    }
 
     // 블록 상호작용
     interactCooldown -= dt;
