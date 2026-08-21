@@ -251,6 +251,45 @@ let frameCount = 0, lastFpsTime = 0;
 // ---- 블록 상호작용 쿨다운 ----
 let interactCooldown = 0;
 
+// ---- 포탈 / 차원 전환 ----
+let portalCooldown = 0;
+const netherSky = new THREE.Color(0.2, 0.05, 0.05);
+const overworldSky = new THREE.Color(0.53, 0.81, 0.92);
+
+function switchDimension() {
+    const newDim = world.dimension === 'overworld' ? 'nether' : 'overworld';
+    world.switchDimension(newDim);
+
+    // 엔티티 모두 제거
+    for (const e of entityManager.entities) {
+        entityManager.scene.remove(e.mesh);
+    }
+    entityManager.entities.length = 0;
+
+    // 하늘/안개 색 변경
+    if (newDim === 'nether') {
+        scene.background = netherSky;
+        scene.fog.color = netherSky;
+        scene.fog.near = 20;
+        scene.fog.far = 80;
+        ambientLight.intensity = 0.4;
+        sunLight.intensity = 0.2;
+    } else {
+        scene.background = overworldSky;
+        scene.fog.color = overworldSky;
+        scene.fog.near = 50;
+        scene.fog.far = 200;
+        ambientLight.intensity = 0.8;
+        sunLight.intensity = 0.8;
+    }
+
+    // 플레이어를 안전한 위치에 놓기
+    player.position.set(0, 30, 0);
+    player.velocity.set(0, 0, 0);
+    world.update(0, 0);
+    portalCooldown = 3;
+}
+
 // ---- 게임 루프 ----
 let lastTime = 0;
 let started = false;
@@ -274,6 +313,21 @@ function gameLoop(time) {
     player.update(dt, inputState);
 
     world.update(player.position.x, player.position.z);
+
+    // 포탈 진입 체크
+    portalCooldown -= dt;
+    if (portalCooldown <= 0) {
+        const px = Math.floor(player.position.x + 0.5);
+        const py = Math.floor(player.position.y + 0.5);
+        const pz = Math.floor(player.position.z + 0.5);
+        // 플레이어 발~머리 범위 체크
+        for (let dy = -1; dy <= 0; dy++) {
+            if (world.getBlock(px, py + dy, pz) === BlockType.NETHER_PORTAL) {
+                switchDimension();
+                break;
+            }
+        }
+    }
 
     // 엔티티 업데이트
     entityManager.update(dt, player.position.x, player.position.y, player.position.z);
@@ -368,7 +422,8 @@ function gameLoop(time) {
     coordsEl.textContent = `X: ${p.x.toFixed(1)} Y: ${p.y.toFixed(1)} Z: ${p.z.toFixed(1)}`;
 
     // 비행 상태
-    flyStatusEl.textContent = player.flying ? '비행 중' : '걷기';
+    const dimName = world.dimension === 'nether' ? '네더' : '오버월드';
+    flyStatusEl.textContent = `${dimName} | ${player.flying ? '비행 중' : '걷기'}`;
 
     renderer.render(scene, camera);
 }

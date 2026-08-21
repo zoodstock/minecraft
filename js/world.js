@@ -14,6 +14,19 @@ export class World {
         this.chunks = new Map();
         this.noise = new SimplexNoise(seed);
         this.renderDistance = 3;
+        this.dimension = 'overworld'; // 'overworld' or 'nether'
+    }
+
+    switchDimension(newDimension) {
+        // Clear all chunks
+        for (const [key, chunk] of this.chunks) {
+            for (const m of chunk.meshes) {
+                this.scene.remove(m);
+                if (m.geometry) m.geometry.dispose();
+            }
+        }
+        this.chunks.clear();
+        this.dimension = newDimension;
     }
 
     getChunkKey(cx, cz) {
@@ -30,6 +43,11 @@ export class World {
     }
 
     generateChunkData(cx, cz) {
+        if (this.dimension === 'nether') return this._generateNetherChunk(cx, cz);
+        return this._generateOverworldChunk(cx, cz);
+    }
+
+    _generateOverworldChunk(cx, cz) {
         const data = new Uint8Array(CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE);
         const ox = cx * CHUNK_SIZE, oz = cz * CHUNK_SIZE;
 
@@ -49,40 +67,74 @@ export class World {
                     }
                     data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = block;
                 }
-
-                // Water fill
                 for (let y = height + 1; y <= WATER_LEVEL; y++) {
                     data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.WATER;
                 }
-
-                // Trees
                 if (height > WATER_LEVEL + 2 && Math.random() < 0.005 &&
                     x > 2 && x < CHUNK_SIZE - 3 && z > 2 && z < CHUNK_SIZE - 3) {
                     const treeH = 4 + Math.floor(Math.random() * 3);
                     for (let ty = 1; ty <= treeH; ty++) {
                         const by = height + ty;
-                        if (by < CHUNK_HEIGHT) {
-                            data[x * CHUNK_HEIGHT * CHUNK_SIZE + by * CHUNK_SIZE + z] = BlockType.WOOD;
-                        }
+                        if (by < CHUNK_HEIGHT) data[x * CHUNK_HEIGHT * CHUNK_SIZE + by * CHUNK_SIZE + z] = BlockType.WOOD;
                     }
-                    // Leaves
-                    const leafStart = height + treeH - 1;
-                    const leafEnd = height + treeH + 2;
-                    for (let lx = -2; lx <= 2; lx++) {
-                        for (let lz = -2; lz <= 2; lz++) {
-                            for (let ly = leafStart; ly <= leafEnd; ly++) {
-                                if (ly >= CHUNK_HEIGHT) continue;
-                                const nx = x + lx, nz = z + lz;
-                                if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
-                                const dist = Math.abs(lx) + Math.abs(lz) + (ly - leafEnd);
-                                if (dist > 3) continue;
-                                const idx = nx * CHUNK_HEIGHT * CHUNK_SIZE + ly * CHUNK_SIZE + nz;
-                                if (data[idx] === BlockType.AIR) {
-                                    data[idx] = BlockType.LEAVES;
-                                }
-                            }
-                        }
+                    const leafStart = height + treeH - 1, leafEnd = height + treeH + 2;
+                    for (let lx = -2; lx <= 2; lx++) for (let lz = -2; lz <= 2; lz++) for (let ly = leafStart; ly <= leafEnd; ly++) {
+                        if (ly >= CHUNK_HEIGHT) continue;
+                        const nx = x + lx, nz = z + lz;
+                        if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
+                        if (Math.abs(lx) + Math.abs(lz) + (ly - leafEnd) > 3) continue;
+                        const idx = nx * CHUNK_HEIGHT * CHUNK_SIZE + ly * CHUNK_SIZE + nz;
+                        if (data[idx] === BlockType.AIR) data[idx] = BlockType.LEAVES;
                     }
+                }
+            }
+        }
+        return data;
+    }
+
+    _generateNetherChunk(cx, cz) {
+        const data = new Uint8Array(CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE);
+        const ox = cx * CHUNK_SIZE, oz = cz * CHUNK_SIZE;
+        const LAVA_LEVEL = 12;
+        const CEILING = 50;
+
+        for (let x = 0; x < CHUNK_SIZE; x++) {
+            for (let z = 0; z < CHUNK_SIZE; z++) {
+                const wx = ox + x, wz = oz + z;
+                // Nether floor - rough terrain
+                const floorH = Math.floor(15 + this.noise.fbm(wx * 0.04, wz * 0.04, 3) * 10);
+                // Nether ceiling
+                const ceilH = Math.floor(CEILING - 3 + this.noise.fbm(wx * 0.03 + 100, wz * 0.03 + 100, 2) * 5);
+
+                // Floor
+                for (let y = 0; y <= Math.min(floorH, CHUNK_HEIGHT - 1); y++) {
+                    if (y < 3) {
+                        data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.OBSIDIAN;
+                    } else {
+                        data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.NETHERRACK;
+                    }
+                }
+
+                // Lava fill in low areas
+                for (let y = floorH + 1; y <= LAVA_LEVEL; y++) {
+                    if (y < CHUNK_HEIGHT) data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.LAVA;
+                }
+
+                // Ceiling
+                for (let y = Math.max(ceilH, 0); y < CHUNK_HEIGHT; y++) {
+                    data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.NETHERRACK;
+                }
+
+                // Glowstone clusters on ceiling
+                if (Math.random() < 0.02 && ceilH > 30) {
+                    for (let gy = ceilH - 1; gy >= ceilH - 3 && gy > 0; gy--) {
+                        data[x * CHUNK_HEIGHT * CHUNK_SIZE + gy * CHUNK_SIZE + z] = BlockType.GLOWSTONE;
+                    }
+                }
+
+                // Soul dirt patches on floor
+                if (floorH > LAVA_LEVEL && Math.random() < 0.08) {
+                    data[x * CHUNK_HEIGHT * CHUNK_SIZE + floorH * CHUNK_SIZE + z] = BlockType.SOUL_DIRT;
                 }
             }
         }
