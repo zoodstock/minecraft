@@ -44,6 +44,7 @@ export class World {
 
     generateChunkData(cx, cz) {
         if (this.dimension === 'nether') return this._generateNetherChunk(cx, cz);
+        if (this.dimension === 'ender') return this._generateEnderChunk(cx, cz);
         return this._generateOverworldChunk(cx, cz);
     }
 
@@ -135,6 +136,65 @@ export class World {
                 // Soul dirt patches on floor
                 if (floorH > LAVA_LEVEL && Math.random() < 0.08) {
                     data[x * CHUNK_HEIGHT * CHUNK_SIZE + floorH * CHUNK_SIZE + z] = BlockType.SOUL_DIRT;
+                }
+            }
+        }
+        return data;
+    }
+
+    _generateEnderChunk(cx, cz) {
+        const data = new Uint8Array(CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE);
+        const ox = cx * CHUNK_SIZE, oz = cz * CHUNK_SIZE;
+
+        for (let x = 0; x < CHUNK_SIZE; x++) {
+            for (let z = 0; z < CHUNK_SIZE; z++) {
+                const wx = ox + x, wz = oz + z;
+
+                // Floating islands with gaps (void between)
+                const n1 = this.noise.fbm(wx * 0.02 + 500, wz * 0.02 + 500, 3);
+                const isIsland = n1 > -0.1; // ~60% coverage, rest is void
+
+                if (!isIsland) continue;
+
+                const baseH = Math.floor(20 + this.noise.fbm(wx * 0.03 + 500, wz * 0.03 + 500, 4) * 12);
+                const thickness = Math.floor(4 + Math.abs(this.noise.noise2D(wx * 0.05, wz * 0.05)) * 6);
+
+                for (let y = baseH - thickness; y <= baseH; y++) {
+                    if (y < 0 || y >= CHUNK_HEIGHT) continue;
+                    if (y === baseH) {
+                        data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.END_STONE;
+                    } else {
+                        data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.END_STONE;
+                    }
+                }
+
+                // Purpur towers (rare)
+                if (Math.random() < 0.003 && x > 1 && x < CHUNK_SIZE - 2 && z > 1 && z < CHUNK_SIZE - 2) {
+                    const towerH = 5 + Math.floor(Math.random() * 10);
+                    for (let ty = 1; ty <= towerH; ty++) {
+                        const by = baseH + ty;
+                        if (by < CHUNK_HEIGHT) {
+                            data[x * CHUNK_HEIGHT * CHUNK_SIZE + by * CHUNK_SIZE + z] = BlockType.PURPUR;
+                        }
+                    }
+                    // Top platform
+                    for (let tx = -1; tx <= 1; tx++) {
+                        for (let tz = -1; tz <= 1; tz++) {
+                            const nx = x + tx, nz = z + tz;
+                            if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
+                            const topY = baseH + towerH + 1;
+                            if (topY < CHUNK_HEIGHT) {
+                                data[nx * CHUNK_HEIGHT * CHUNK_SIZE + topY * CHUNK_SIZE + nz] = BlockType.PURPUR;
+                            }
+                        }
+                    }
+                }
+
+                // Obsidian pillars (very rare, tall)
+                if (Math.random() < 0.001) {
+                    for (let py = baseH + 1; py < Math.min(baseH + 20, CHUNK_HEIGHT); py++) {
+                        data[x * CHUNK_HEIGHT * CHUNK_SIZE + py * CHUNK_SIZE + z] = BlockType.OBSIDIAN;
+                    }
                 }
             }
         }

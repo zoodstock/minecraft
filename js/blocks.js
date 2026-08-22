@@ -16,6 +16,8 @@ export const BlockType = {
     NETHERRACK: 11,
     LAVA: 12,
     GLOWSTONE: 13,
+    END_STONE: 14,
+    PURPUR: 15,
 };
 
 export const BLOCK_NAMES = {
@@ -163,13 +165,27 @@ export function createBlockTextures() {
     const glowstone = createTexture((ctx, s) => addNoise(ctx, s, [200, 180, 80], 25));
     textures[BlockType.GLOWSTONE] = { top: glowstone, bottom: glowstone, side: glowstone };
 
+    // End Stone - pale yellow/cream
+    const endStone = createTexture((ctx, s) => addNoise(ctx, s, [220, 215, 180], 15));
+    textures[BlockType.END_STONE] = { top: endStone, bottom: endStone, side: endStone };
+
+    // Purpur - purple end block
+    const purpur = createTexture((ctx, s) => {
+        addNoise(ctx, s, [150, 100, 160], 15);
+        for (let y = 0; y < s; y += 4) {
+            ctx.fillStyle = 'rgba(120, 70, 140, 0.3)';
+            ctx.fillRect(0, y, s, 1);
+        }
+    });
+    textures[BlockType.PURPUR] = { top: purpur, bottom: purpur, side: purpur };
+
     return textures;
 }
 
 // Create materials for each block face
 export function createBlockMaterials(textures) {
     const materials = {};
-    const allRendered = [...PLACEABLE_BLOCKS, BlockType.NETHER_PORTAL, BlockType.NETHERRACK, BlockType.LAVA, BlockType.GLOWSTONE];
+    const allRendered = [...PLACEABLE_BLOCKS, BlockType.NETHER_PORTAL, BlockType.NETHERRACK, BlockType.LAVA, BlockType.GLOWSTONE, BlockType.END_STONE, BlockType.PURPUR];
     for (const type of allRendered) {
         const tex = textures[type];
         const transparent = type === BlockType.WATER || type === BlockType.LEAVES || type === BlockType.NETHER_PORTAL || type === BlockType.LAVA;

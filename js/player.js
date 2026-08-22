@@ -93,7 +93,7 @@ export class Player {
             this.position.x += this.velocity.x * dt;
             this.position.y += this.velocity.y * dt;
             this.position.z += this.velocity.z * dt;
-            if (this.position.y < 1) this.position.y = 1;
+            if (this.position.y < -20) this.position.y = -20;
         } else {
             // Normal mode: gravity & jump
             this.velocity.y += GRAVITY * dt;
@@ -133,8 +133,8 @@ export class Player {
             this.velocity.y = 0;
         }
 
-        if (this.position.y < 1) {
-            this.position.y = 1;
+        if (this.position.y < -20) {
+            this.position.y = -20;
             this.velocity.y = 0;
             this.onGround = true;
         }

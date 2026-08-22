@@ -257,9 +257,16 @@ let interactCooldown = 0;
 let portalCooldown = 0;
 const netherSky = new THREE.Color(0.2, 0.05, 0.05);
 const overworldSky = new THREE.Color(0.53, 0.81, 0.92);
+const enderSky = new THREE.Color(0.02, 0.0, 0.08);
 
-function switchDimension() {
-    const newDim = world.dimension === 'overworld' ? 'nether' : 'overworld';
+function switchDimension(target) {
+    let newDim;
+    if (target) {
+        newDim = target;
+    } else {
+        newDim = world.dimension === 'overworld' ? 'nether' : 'overworld';
+    }
+    if (newDim === world.dimension) return;
     world.switchDimension(newDim);
 
     // 엔티티 모두 제거
@@ -276,6 +283,14 @@ function switchDimension() {
         scene.fog.far = 80;
         ambientLight.intensity = 0.4;
         sunLight.intensity = 0.2;
+    } else if (newDim === 'ender') {
+        scene.background = enderSky;
+        scene.fog.color = enderSky;
+        scene.fog.near = 30;
+        scene.fog.far = 120;
+        ambientLight.intensity = 0.25;
+        sunLight.intensity = 0.15;
+        sunLight.color.setHex(0x8855cc);
     } else {
         scene.background = overworldSky;
         scene.fog.color = overworldSky;
@@ -283,6 +298,7 @@ function switchDimension() {
         scene.fog.far = 200;
         ambientLight.intensity = 0.8;
         sunLight.intensity = 0.8;
+        sunLight.color.setHex(0xffffff);
     }
 
     // 플레이어를 안전한 위치에 놓기
@@ -351,6 +367,15 @@ function gameLoop(time) {
                 switchDimension();
                 break;
             }
+        }
+    }
+
+    // 허공 낙하 -> 엔더월드
+    if (player.position.y < -10 && portalCooldown <= 0) {
+        if (world.dimension === 'ender') {
+            switchDimension('overworld');
+        } else {
+            switchDimension('ender');
         }
     }
 
@@ -454,7 +479,7 @@ function gameLoop(time) {
     coordsEl.textContent = `X: ${p.x.toFixed(1)} Y: ${p.y.toFixed(1)} Z: ${p.z.toFixed(1)}`;
 
     // 비행 상태
-    const dimName = world.dimension === 'nether' ? '네더' : '오버월드';
+    const dimName = world.dimension === 'nether' ? '네더' : (world.dimension === 'ender' ? '엔더월드' : '오버월드');
     flyStatusEl.textContent = `${dimName} | ${player.flying ? '비행 중' : '걷기'}`;
 
     // 멀티플레이어: 위치 전송
