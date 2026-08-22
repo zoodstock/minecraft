@@ -1173,439 +1173,555 @@ class Wither {
 // ============================================================
 // Ghast - Nether flying mob, tame with Fire to ride
 // ============================================================
-// Helpers for new mobs (Ghast, Guardian, Dragon)
-// ============================================================
-function box(w,h,d,color,opts={}) {
-    return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color,...opts}));
-}
-function glow(w,h,d,color) {
-    return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color}));
-}
-function sph(r,color,opts={}) {
-    return new THREE.Mesh(new THREE.SphereGeometry(r,8,6), new THREE.MeshLambertMaterial({color,...opts}));
-}
-function initBase(e, type, x, y, z, speed) {
-    e.type = type; e.alive = true; e.tamed = false;
-    e.time = Math.random() * Math.PI * 2;
-    e.dirTimer = 2 + Math.random() * 4;
-    e.velocity = new THREE.Vector3((Math.random()-0.5)*speed, 0, (Math.random()-0.5)*speed);
-    e.mesh.position.set(x, y, z);
-}
-function faceDir(mesh, vx, vz, dt) {
-    if (Math.abs(vx)<0.01 && Math.abs(vz)<0.01) return;
-    const yaw = Math.atan2(vx,vz)+Math.PI;
-    let diff = yaw - mesh.rotation.y;
-    if (diff>Math.PI) diff-=Math.PI*2; if (diff<-Math.PI) diff+=Math.PI*2;
-    mesh.rotation.y += diff*dt*3;
-}
-function stayInWater(e, world) {
-    const p=e.mesh.position;
-    const bx=Math.floor(p.x+0.5), by=Math.floor(p.y+0.5), bz=Math.floor(p.z+0.5);
-    if (world.getBlock(bx,by,bz)!==BlockType.WATER) {
-        if (world.getBlock(bx,by+1,bz)===BlockType.WATER) e.velocity.y=0.3;
-        else if (world.getBlock(bx,by-1,bz)===BlockType.WATER) e.velocity.y=-0.3;
-        else { e.velocity.x*=-1; e.velocity.z*=-1; }
+
+function createGhastMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+
+    group.add(bm(2.2, 2.2, 2.2, 0xe8e8e8));
+    // Cheek bumps
+    group.add(bm(0.3,0.3,0.15, 0xdddddd)).position.set(-0.7, 0, -1.15);
+    group.add(bm(0.3,0.3,0.15, 0xdddddd)).position.set(0.7, 0, -1.15);
+    // Eyes
+    for (const [sx, name] of [[-0.4,'eyeL'],[0.4,'eyeR']]) {
+        group.add(bm(0.4,0.45,0.1, 0xffffff)).position.set(sx, 0.25, -1.15);
+        const pupil = gm(0.2,0.3,0.12, 0x111111); pupil.position.set(sx, 0.2, -1.18); pupil.name = name; group.add(pupil);
+        const tear = gm(0.06,0.35,0.05, 0x5555cc); tear.position.set(sx, -0.1, -1.16); tear.name = `tear_${name}`; group.add(tear);
     }
-    if (p.y<1) { p.y=1; e.velocity.y=0.2; }
-}
-function moveAndBob(e, dt, bobSpeed=2) {
-    const p=e.mesh.position;
-    p.x+=e.velocity.x*dt; p.y+=e.velocity.y*dt; p.z+=e.velocity.z*dt;
-    p.y+=Math.sin(e.time*bobSpeed)*0.01;
-}
-function wander(e, dt, speed) {
-    e.dirTimer -= dt;
-    if (e.dirTimer<=0) {
-        e.velocity.x=(Math.random()-0.5)*speed; e.velocity.z=(Math.random()-0.5)*speed;
-        e.velocity.y=(Math.random()-0.5)*0.2; e.dirTimer=2+Math.random()*5;
+    // Mouth
+    group.add(gm(0.5, 0.15, 0.1, 0x333333)).position.set(0, -0.35, -1.15);
+    group.add(gm(0.35, 0.08, 0.1, 0x551111)).position.set(0, -0.3, -1.13);
+    // Tentacles - multi-segment
+    for (let tx = -1; tx <= 1; tx++) {
+        for (let tz = -1; tz <= 1; tz++) {
+            const tg = new THREE.Group(); tg.name = `tg${(tx+1)*3+(tz+1)}`;
+            tg.position.set(tx * 0.6, -1.1, tz * 0.6);
+            const segs = 3 + Math.floor(Math.random() * 2);
+            for (let s = 0; s < segs; s++) {
+                const w = 0.2 - s * 0.03;
+                const seg = bm(w, 0.6, w, s === 0 ? 0xcccccc : 0xbbbbbb);
+                seg.position.y = -s * 0.55; seg.name = `ts${s}`;
+                tg.add(seg);
+            }
+            group.add(tg);
+        }
     }
+    return group;
 }
 
-// ==================== GHAST ====================
-function createGhastMesh() {
-    const g = new THREE.Group();
-    // Main body - large white cube with bumpy texture
-    g.add(box(2.2,2.2,2.2, 0xe8e8e8));
-    // Cheek bumps
-    g.add(box(0.3,0.3,0.15, 0xdddddd)).position.set(-0.7,0,-1.15);
-    g.add(box(0.3,0.3,0.15, 0xdddddd)).position.set(0.7,0,-1.15);
-    // Eyes - large sad drooping
-    for (const [sx,name] of [[-0.4,'eyeL'],[0.4,'eyeR']]) {
-        const eyeBg = box(0.4,0.45,0.1, 0xffffff); eyeBg.position.set(sx,0.25,-1.15); g.add(eyeBg);
-        const pupil = glow(0.2,0.3,0.12, 0x111111); pupil.position.set(sx,0.2,-1.18); pupil.name=name; g.add(pupil);
-        // Tear streak
-        const tear = glow(0.06,0.35,0.05, 0x5555cc); tear.position.set(sx,-0.1,-1.16); tear.name=`tear_${name}`; g.add(tear);
-    }
-    // Mouth - dark sad frown
-    g.add(glow(0.5,0.15,0.1, 0x333333)).position.set(0,-0.35,-1.15);
-    g.add(glow(0.35,0.08,0.1, 0x551111)).position.set(0,-0.3,-1.13);
-    // Tentacles - 9 long wavy ones
-    for (let tx=-1;tx<=1;tx++) for (let tz=-1;tz<=1;tz++) {
-        const tg = new THREE.Group(); tg.name=`tg${(tx+1)*3+(tz+1)}`;
-        tg.position.set(tx*0.6, -1.1, tz*0.6);
-        const segs = 3 + Math.floor(Math.random()*2);
-        for (let s=0;s<segs;s++) {
-            const w = 0.2 - s*0.03;
-            const seg = box(w, 0.6, w, s===0 ? 0xcccccc : 0xbbbbbb);
-            seg.position.y = -s*0.55;
-            seg.name = `ts${s}`;
-            tg.add(seg);
-        }
-        g.add(tg);
-    }
-    return g;
-}
 class Ghast {
-    constructor(x,y,z) {
+    constructor(x, y, z) {
+        this.type = 'ghast';
         this.mesh = createGhastMesh();
-        initBase(this, 'ghast', x, y, z, 0.8);
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3((Math.random()-0.5)*0.8, 0, (Math.random()-0.5)*0.8);
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 3 + Math.random() * 4;
+        this.alive = true;
+        this.tamed = false;
+        this.rider = null; // player reference when riding
     }
+
     update(dt) {
         if (!this.alive) return;
         this.time += dt;
-        // Tentacle wave animation
-        for (let i=0;i<9;i++) {
+
+        // Tentacle chain wave
+        for (let i = 0; i < 9; i++) {
             const tg = this.mesh.getObjectByName(`tg${i}`);
             if (!tg) continue;
-            tg.rotation.x = Math.sin(this.time*1.2+i*0.8)*0.12;
-            tg.rotation.z = Math.cos(this.time*0.9+i*1.1)*0.08;
-            for (let s=0;s<5;s++) {
+            tg.rotation.x = Math.sin(this.time * 1.2 + i * 0.8) * 0.12;
+            tg.rotation.z = Math.cos(this.time * 0.9 + i * 1.1) * 0.08;
+            for (let s = 0; s < 5; s++) {
                 const seg = tg.getObjectByName(`ts${s}`);
-                if (seg) seg.rotation.x = Math.sin(this.time*1.5+i+s*0.6)*0.1*(s+1);
+                if (seg) seg.rotation.x = Math.sin(this.time * 1.5 + i + s * 0.6) * 0.1 * (s + 1);
             }
         }
         // Tear drip
-        for (const n of ['tear_eyeL','tear_eyeR']) {
+        for (const n of ['tear_eyeL', 'tear_eyeR']) {
             const t = this.mesh.getObjectByName(n);
-            if (t) t.position.y = -0.1 + Math.sin(this.time*2.5)*0.06;
+            if (t) t.position.y = -0.1 + Math.sin(this.time * 2.5) * 0.06;
         }
-        // Eye tracking subtle
-        for (const n of ['eyeL','eyeR']) {
+        // Eye tracking
+        for (const n of ['eyeL', 'eyeR']) {
             const e = this.mesh.getObjectByName(n);
-            if (e) e.position.x += Math.sin(this.time*0.8)*0.003;
+            if (e) e.position.x += Math.sin(this.time * 0.8) * 0.003;
         }
-        if (!this.tamed) wander(this, dt, 0.8);
-        moveAndBob(this, dt, 0.8);
-        const p = this.mesh.position;
-        if (p.y<15) this.velocity.y=Math.abs(this.velocity.y)+0.2;
-        if (p.y>45) this.velocity.y=-Math.abs(this.velocity.y)-0.2;
-        faceDir(this.mesh, this.velocity.x, this.velocity.z, dt);
+
+        if (!this.tamed) {
+            // Idle float
+            this.dirChangeTimer -= dt;
+            if (this.dirChangeTimer <= 0) {
+                this.velocity.x = (Math.random()-0.5) * 0.8;
+                this.velocity.z = (Math.random()-0.5) * 0.8;
+                this.velocity.y = (Math.random()-0.5) * 0.3;
+                this.dirChangeTimer = 3 + Math.random() * 4;
+            }
+        }
+
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+        pos.y += Math.sin(this.time * 0.8) * 0.01;
+
+        if (pos.y < 15) this.velocity.y = Math.abs(this.velocity.y) + 0.2;
+        if (pos.y > 45) this.velocity.y = -Math.abs(this.velocity.y) - 0.2;
+
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
     }
 }
 
-// ==================== GUARDIAN ====================
+// ============================================================
+// Guardian - Ocean mob, tame with Clione egg -> creates End Portal
+// ============================================================
+
 function createGuardianMesh() {
-    const g = new THREE.Group();
-    const teal=0x3a8a7a, dark=0x2a5a5a, orange=0xdd6622;
-    // Main body - rotated cube (diamond)
-    const body = box(1.4,1.0,1.4, teal); body.rotation.y=Math.PI/4; g.add(body);
-    // Inner body detail
-    const inner = box(1.0,0.7,1.0, 0x4a9a8a); inner.rotation.y=Math.PI/4; g.add(inner);
-    // Eye - large single cyclopean eye
-    g.add(box(0.45,0.45,0.08, 0xf0f0f0)).position.set(0,0.05,-0.75);
-    const iris = glow(0.25,0.25,0.1, orange); iris.position.set(0,0.05,-0.78); iris.name='iris'; g.add(iris);
-    const pupil = glow(0.1,0.18,0.11, 0x111111); pupil.position.set(0,0.05,-0.8); pupil.name='pupil'; g.add(pupil);
-    // Spikes - 12 retractable spines
-    const spines = [
-        [0,0.7,0], [0,-0.7,0],
-        [0.8,0,0], [-0.8,0,0], [0,0,0.8], [0,0,-0.8],
-        [0.5,0.4,0.5], [-0.5,0.4,-0.5], [0.5,-0.4,-0.5], [-0.5,-0.4,0.5],
-        [0.5,0.4,-0.5], [-0.5,-0.4,-0.5],
-    ];
-    spines.forEach(([sx,sy,sz],i) => {
-        const spine = box(0.12,0.35,0.12, dark);
-        spine.position.set(sx,sy,sz);
-        spine.lookAt(sx*3,sy*3,sz*3);
-        spine.name=`sp${i}`;
-        g.add(spine);
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const teal = 0x3a8a7a, dark = 0x2a5a5a, orange = 0xdd6622;
+
+    // Diamond body + inner
+    const body = bm(1.4, 1.0, 1.4, teal); body.rotation.y = Math.PI / 4; group.add(body);
+    const inner = bm(1.0, 0.7, 1.0, 0x4a9a8a); inner.rotation.y = Math.PI / 4; group.add(inner);
+    // Cyclopean eye
+    group.add(bm(0.45, 0.45, 0.08, 0xf0f0f0)).position.set(0, 0.05, -0.75);
+    const iris = gm(0.25, 0.25, 0.1, orange); iris.position.set(0, 0.05, -0.78); iris.name = 'iris'; group.add(iris);
+    const pupil = gm(0.1, 0.18, 0.11, 0x111111); pupil.position.set(0, 0.05, -0.8); pupil.name = 'pupil'; group.add(pupil);
+    // 12 spines
+    const spines = [[0,0.7,0],[0,-0.7,0],[0.8,0,0],[-0.8,0,0],[0,0,0.8],[0,0,-0.8],
+        [0.5,0.4,0.5],[-0.5,0.4,-0.5],[0.5,-0.4,-0.5],[-0.5,-0.4,0.5],[0.5,0.4,-0.5],[-0.5,-0.4,-0.5]];
+    spines.forEach(([sx,sy,sz], i) => {
+        const sp = bm(0.12, 0.35, 0.12, dark); sp.position.set(sx,sy,sz);
+        sp.lookAt(sx*3, sy*3, sz*3); sp.name = `spike${i}`; group.add(sp);
     });
-    // Tail fin
-    const tail = box(0.25,0.2,0.6, teal); tail.position.set(0,0,1.0); tail.name='tail'; g.add(tail);
-    const tailTip = box(0.4,0.15,0.3, dark); tailTip.position.set(0,0,1.35); tailTip.name='tailTip'; g.add(tailTip);
-    // Beam emitter (orange dot under eye)
-    const beam = glow(0.08,0.08,0.08, 0xff8800); beam.position.set(0,-0.2,-0.75); beam.name='beam'; g.add(beam);
-    return g;
+    // Two-part tail
+    const tail = bm(0.25, 0.2, 0.6, teal); tail.position.set(0, 0, 1.0); tail.name = 'tail'; group.add(tail);
+    const tailTip = bm(0.4, 0.15, 0.3, dark); tailTip.position.set(0, 0, 1.35); tailTip.name = 'tailTip'; group.add(tailTip);
+    // Beam emitter
+    const beam = gm(0.08, 0.08, 0.08, 0xff8800); beam.position.set(0, -0.2, -0.75); beam.name = 'beam'; group.add(beam);
+    return group;
 }
+
 class Guardian {
-    constructor(x,y,z) {
+    constructor(x, y, z) {
+        this.type = 'guardian';
         this.mesh = createGuardianMesh();
-        initBase(this, 'guardian', x, y, z, 0.6);
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3((Math.random()-0.5)*0.6, 0, (Math.random()-0.5)*0.6);
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 2 + Math.random() * 4;
+        this.alive = true;
+        this.tamed = false;
     }
+
     update(dt, world) {
         if (!this.alive) return;
         this.time += dt;
+
         // Eye tracking
         const iris = this.mesh.getObjectByName('iris');
         const pupil = this.mesh.getObjectByName('pupil');
-        if (iris) iris.position.x = Math.sin(this.time*1.2)*0.06;
-        if (pupil) pupil.position.x = Math.sin(this.time*1.2)*0.06;
-        // Spine pulse - extend/retract
-        for (let i=0;i<12;i++) {
-            const sp = this.mesh.getObjectByName(`sp${i}`);
-            if (sp) {
-                const pulse = 1 + Math.sin(this.time*2.5+i*0.5)*0.25;
-                sp.scale.y = pulse;
-            }
+        if (iris) iris.position.x = Math.sin(this.time * 1.2) * 0.06;
+        if (pupil) pupil.position.x = Math.sin(this.time * 1.2) * 0.06;
+
+        // Spine pulse
+        for (let i = 0; i < 12; i++) {
+            const spike = this.mesh.getObjectByName(`spike${i}`);
+            if (spike) spike.scale.y = 1 + Math.sin(this.time * 2.5 + i * 0.5) * 0.25;
         }
-        // Tail swish
+        // Two-part tail
         const tail = this.mesh.getObjectByName('tail');
         const tailTip = this.mesh.getObjectByName('tailTip');
-        if (tail) tail.rotation.y = Math.sin(this.time*3)*0.5;
-        if (tailTip) tailTip.rotation.y = Math.sin(this.time*3+0.5)*0.6;
+        if (tail) tail.rotation.y = Math.sin(this.time * 3) * 0.5;
+        if (tailTip) tailTip.rotation.y = Math.sin(this.time * 3 + 0.5) * 0.6;
         // Beam pulse
         const beam = this.mesh.getObjectByName('beam');
-        if (beam) beam.material.opacity = 0.5 + Math.sin(this.time*4)*0.5;
-        // Body slow rotation
-        this.mesh.rotation.x = Math.sin(this.time*0.5)*0.05;
-        if (!this.tamed) wander(this, dt, 0.6);
-        moveAndBob(this, dt, 1);
-        faceDir(this.mesh, this.velocity.x, this.velocity.z, dt);
-        stayInWater(this, world);
+        if (beam) beam.material.opacity = 0.5 + Math.sin(this.time * 4) * 0.5;
+        this.mesh.rotation.x = Math.sin(this.time * 0.5) * 0.05;
+
+        if (!this.tamed) {
+            this.dirChangeTimer -= dt;
+            if (this.dirChangeTimer <= 0) {
+                this.velocity.x = (Math.random()-0.5) * 0.6;
+                this.velocity.z = (Math.random()-0.5) * 0.6;
+                this.velocity.y = (Math.random()-0.5) * 0.2;
+                this.dirChangeTimer = 2 + Math.random() * 4;
+            }
+        }
+
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+        pos.y += Math.sin(this.time) * 0.01;
+
+        // Stay in water
+        const bx = Math.floor(pos.x+0.5), by = Math.floor(pos.y+0.5), bz = Math.floor(pos.z+0.5);
+        if (world.getBlock(bx, by, bz) !== BlockType.WATER) {
+            if (world.getBlock(bx, by+1, bz) === BlockType.WATER) this.velocity.y = 0.3;
+            else if (world.getBlock(bx, by-1, bz) === BlockType.WATER) this.velocity.y = -0.3;
+            else { this.velocity.x *= -1; this.velocity.z *= -1; }
+        }
+        if (pos.y < 1) { pos.y = 1; this.velocity.y = 0.2; }
+
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
     }
 }
 
-// ==================== ENDER DRAGON ====================
+// ============================================================
+// Ender Dragon - Final boss in Ender World
+// ============================================================
+
 function createEnderDragonMesh() {
-    const g = new THREE.Group();
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
     const bk=0x111118, dk=0x0a0a12, pu=0x6622aa, ey=0xcc44ff;
 
-    // HEAD - angular dragon skull
-    const skull = box(1.4,0.9,1.6, bk); skull.position.set(0,0.5,-2.5); g.add(skull);
-    // Brow ridge
-    g.add(box(1.5,0.2,0.6, dk)).position.set(0,0.95,-2.3);
-    // Snout
-    const snout = box(0.9,0.6,1.0, bk); snout.position.set(0,0.25,-3.3); g.add(snout);
+    // Head + brow ridge
+    group.add(bm(1.4,0.9,1.6, bk)).position.set(0,0.5,-2.5);
+    group.add(bm(1.5,0.2,0.6, dk)).position.set(0,0.95,-2.3);
+    group.add(bm(0.9,0.6,1.0, bk)).position.set(0,0.25,-3.3);
     // Nostrils
-    for (const sx of [-0.2,0.2]) g.add(glow(0.1,0.08,0.08, 0x331155)).position.set(sx,0.45,-3.82);
-    // Eyes - large glowing purple
+    for (const sx of [-0.2,0.2]) group.add(gm(0.1,0.08,0.08, 0x331155)).position.set(sx,0.45,-3.82);
+    // Eyes
     for (const sx of [-0.4,0.4]) {
-        g.add(box(0.3,0.25,0.1, 0x220044)).position.set(sx,0.7,-3.25);
-        g.add(glow(0.22,0.18,0.12, ey)).position.set(sx,0.7,-3.28);
+        group.add(bm(0.3,0.25,0.1, 0x220044)).position.set(sx,0.7,-3.25);
+        group.add(gm(0.22,0.18,0.12, ey)).position.set(sx,0.7,-3.28);
     }
-    // Jaw
+    // Jaw with teeth
     const jawG = new THREE.Group(); jawG.name='jaw'; jawG.position.set(0,0,-3.0);
-    jawG.add(box(0.8,0.2,0.8, dk));
-    // Teeth
+    jawG.add(bm(0.8,0.2,0.8, dk));
+    const toothMat = new THREE.MeshLambertMaterial({color:0xddddcc});
     for (let i=-3;i<=3;i++) {
-        const t = new THREE.Mesh(new THREE.ConeGeometry(0.04,0.12,4), new THREE.MeshLambertMaterial({color:0xddddcc}));
+        const t = new THREE.Mesh(new THREE.ConeGeometry(0.04,0.12,4), toothMat);
         t.position.set(i*0.1, 0.12, -0.35); jawG.add(t);
         const t2 = t.clone(); t2.position.set(i*0.1, -0.05, -0.35); t2.rotation.x=Math.PI; jawG.add(t2);
     }
-    g.add(jawG);
-    // Horns - curved back
+    group.add(jawG);
+    // Curved horns
     for (const sx of [-0.45,0.45]) {
-        const h1 = box(0.12,0.55,0.15, 0x333340); h1.position.set(sx,1.05,-2.2); h1.rotation.x=-0.4; g.add(h1);
-        const h2 = box(0.08,0.3,0.1, 0x444450); h2.position.set(sx,1.35,-2.0); h2.rotation.x=-0.6; g.add(h2);
+        const h1=bm(0.12,0.55,0.15, 0x333340); h1.position.set(sx,1.05,-2.2); h1.rotation.x=-0.4; group.add(h1);
+        const h2=bm(0.08,0.3,0.1, 0x444450); h2.position.set(sx,1.35,-2.0); h2.rotation.x=-0.6; group.add(h2);
     }
-
-    // NECK - 4 segments, flexible
-    for (let i=0;i<4;i++) {
-        const w = 0.8+i*0.15;
-        const n = box(w,0.65,0.55, bk);
-        n.position.set(0, 0.35-i*0.04, -1.6+i*0.45);
-        n.name=`neck${i}`;
-        g.add(n);
-    }
-
-    // BODY - large thorax
-    g.add(box(2.2,1.4,3.2, bk)).position.set(0,0,0.5);
-    // Belly (slightly lighter)
-    g.add(box(1.6,0.15,2.8, 0x1a1a28)).position.set(0,-0.7,0.5);
-
-    // Spine ridge - purple spines along back
-    for (let i=0;i<8;i++) {
-        const h = 0.2 + Math.sin(i/7*Math.PI)*0.25;
-        const spine = box(0.12, h, 0.2, pu);
-        spine.position.set(0, 0.75+h/2, -1.5+i*0.55);
-        g.add(spine);
-    }
-
-    // WINGS - large with bone structure and membrane
-    const wingBone = new THREE.MeshLambertMaterial({color:dk});
-    const wingMem = new THREE.MeshLambertMaterial({color:pu, transparent:true, opacity:0.45, side:THREE.DoubleSide});
+    // Neck (4 segments)
+    for (let i=0;i<4;i++) { const n=bm(0.8+i*0.15,0.65,0.55,bk); n.position.set(0,0.35-i*0.04,-1.6+i*0.45); n.name=`neck${i}`; group.add(n); }
+    // Body + belly
+    group.add(bm(2.2,1.4,3.2, bk)).position.set(0,0,0.5);
+    group.add(bm(1.6,0.15,2.8, 0x1a1a28)).position.set(0,-0.7,0.5);
+    // Spine ridges
+    for (let i=0;i<8;i++) { const h=0.2+Math.sin(i/7*Math.PI)*0.25; group.add(bm(0.12,h,0.2,pu)).position.set(0,0.75+h/2,-1.5+i*0.55); }
+    // Wings
+    const wingMemb = new THREE.MeshLambertMaterial({color:pu, transparent:true, opacity:0.45, side:THREE.DoubleSide});
     for (const [sx,name] of [[-1.1,'wingL'],[1.1,'wingR']]) {
         const wg = new THREE.Group(); wg.name=name; wg.position.set(sx,0.6,0);
-        const dir = sx<0 ? -1 : 1;
-        // Upper arm bone
-        const arm = box(2.5,0.15,0.2, 0, {color:dk}); arm.material = wingBone;
-        arm.position.set(dir*1.25,0,0); wg.add(arm);
-        // Forearm
-        const fore = box(2.0,0.1,0.15, 0, {color:dk}); fore.material = wingBone;
-        fore.position.set(dir*2.6,-0.15,0.3); fore.rotation.z=dir*0.15; wg.add(fore);
-        // Membrane
-        const mem1 = new THREE.Mesh(new THREE.BoxGeometry(2.8,0.04,2.0), wingMem);
-        mem1.position.set(dir*1.5,-0.1,0.5); wg.add(mem1);
-        const mem2 = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.04,1.4), wingMem);
-        mem2.position.set(dir*2.8,-0.2,0.6); wg.add(mem2);
-        // Wing finger tips
-        for (let f=0;f<3;f++) {
-            const finger = box(0.06, 0.06, 1.0+f*0.3, dk);
-            finger.position.set(dir*(1.0+f*0.7), -0.05, 1.2+f*0.15);
-            wg.add(finger);
-        }
-        g.add(wg);
+        const dir = sx<0?-1:1;
+        wg.add(bm(2.5,0.15,0.2, dk)).position.set(dir*1.25,0,0);
+        wg.add(bm(2.0,0.1,0.15, dk)).position.set(dir*2.6,-0.15,0.3);
+        const m1=new THREE.Mesh(new THREE.BoxGeometry(2.8,0.04,2.0),wingMemb); m1.position.set(dir*1.5,-0.1,0.5); wg.add(m1);
+        const m2=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.04,1.4),wingMemb); m2.position.set(dir*2.8,-0.2,0.6); wg.add(m2);
+        for (let f=0;f<3;f++) { wg.add(bm(0.06,0.06,1.0+f*0.3,dk)).position.set(dir*(1.0+f*0.7),-0.05,1.2+f*0.15); }
+        group.add(wg);
     }
-
-    // TAIL - 5 segments tapering
-    for (let i=0;i<5;i++) {
-        const s = 0.7-i*0.12;
-        const t = box(s, s*0.55, 0.8, bk);
-        t.position.set(0, -0.1-i*0.08, 2.3+i*0.7);
-        t.name=`tail${i}`;
-        g.add(t);
+    // Tail (5 seg + spike)
+    for (let i=0;i<5;i++) { const s=0.7-i*0.12; const t=bm(s,s*0.55,0.8,bk); t.position.set(0,-0.1-i*0.08,2.3+i*0.7); t.name=`tail${i}`; group.add(t); }
+    group.add(bm(0.15,0.15,0.4, pu)).position.set(0,-0.5,5.8);
+    // 4 legs with claws
+    for (const [lx,lz,sc] of [[-0.7,0,1],[0.7,0,1],[-0.5,1.8,0.8],[0.5,1.8,0.8]]) {
+        group.add(bm(0.25*sc,0.7*sc,0.25*sc, dk)).position.set(lx,-0.8,lz);
+        group.add(bm(0.2*sc,0.5*sc,0.2*sc, dk)).position.set(lx,-1.25,lz+0.1);
+        for (let c=-1;c<=1;c++) group.add(bm(0.06*sc,0.08*sc,0.15*sc, 0x333340)).position.set(lx+c*0.08*sc,-1.5*sc+0.05,lz-0.05);
     }
-    // Tail spike
-    const spike = box(0.15,0.15,0.4, pu); spike.position.set(0,-0.5,5.8); spike.name='tailSpike'; g.add(spike);
-
-    // LEGS - front & back
-    for (const [lx,lz,scale] of [[-0.7,0.0,1],[ 0.7,0.0,1],[-0.5,1.8,0.8],[0.5,1.8,0.8]]) {
-        const thigh = box(0.25*scale,0.7*scale,0.25*scale, dk); thigh.position.set(lx,-0.8,lz); g.add(thigh);
-        const shin = box(0.2*scale,0.5*scale,0.2*scale, dk); shin.position.set(lx,-1.25,lz+0.1); g.add(shin);
-        // Claws
-        for (let c=-1;c<=1;c++) {
-            const claw = box(0.06*scale,0.08*scale,0.15*scale, 0x333340);
-            claw.position.set(lx+c*0.08*scale, -1.5*scale+0.05, lz-0.05);
-            g.add(claw);
-        }
-    }
-
-    return g;
+    return group;
 }
+
 class EnderDragon {
-    constructor(x,y,z) {
+    constructor(x, y, z) {
+        this.type = 'enderdragon';
         this.mesh = createEnderDragonMesh();
-        initBase(this, 'enderdragon', x, y, z, 0);
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(1, 0, 0);
+        this.time = Math.random() * Math.PI * 2;
+        this.alive = true;
         this.hp = 100;
         this.orbitAngle = 0;
-        this.orbitCenter = new THREE.Vector3(x, 0, z);
-        this.jawOpen = 0;
+        this.orbitRadius = 25;
+        this.orbitY = 35;
+        this.orbitCenter = new THREE.Vector3(0, 0, 0);
     }
+
     update(dt) {
         if (!this.alive) return;
         this.time += dt;
+
         // Wing flap
-        const wL=this.mesh.getObjectByName('wingL'), wR=this.mesh.getObjectByName('wingR');
-        if (wL) wL.rotation.z = Math.sin(this.time*2.5)*0.55;
-        if (wR) wR.rotation.z = -Math.sin(this.time*2.5)*0.55;
+        const wingL = this.mesh.getObjectByName('wingL');
+        const wingR = this.mesh.getObjectByName('wingR');
+        if (wingL) wingL.rotation.z = Math.sin(this.time * 2.5) * 0.5;
+        if (wingR) wingR.rotation.z = -Math.sin(this.time * 2.5) * 0.5;
+
         // Tail wave
-        for (let i=0;i<5;i++) {
-            const t=this.mesh.getObjectByName(`tail${i}`);
-            if(t) t.position.x = Math.sin(this.time*1.8+i*0.7)*0.12*(i+1);
+        for (let i = 0; i < 4; i++) {
+            const tail = this.mesh.getObjectByName(`tail${i}`);
+            if (tail) tail.position.x = Math.sin(this.time * 2 + i * 0.8) * 0.15 * (i + 1);
         }
-        const spike = this.mesh.getObjectByName('tailSpike');
-        if (spike) spike.position.x = Math.sin(this.time*1.8+4)*0.5;
+
         // Neck wave
-        for (let i=0;i<4;i++) {
-            const n=this.mesh.getObjectByName(`neck${i}`);
-            if(n) n.position.x = Math.sin(this.time*1.5+i*0.4)*0.06*(i+1);
+        for (let i = 0; i < 3; i++) {
+            const neck = this.mesh.getObjectByName(`neck${i}`);
+            if (neck) neck.position.x = Math.sin(this.time * 1.5 + i * 0.5) * 0.08;
         }
-        // Jaw open/close
+
+        // Jaw
         const jaw = this.mesh.getObjectByName('jaw');
-        if (jaw) {
-            this.jawOpen = Math.max(0, Math.sin(this.time*0.8)*0.15);
-            jaw.position.y = -this.jawOpen;
-            jaw.rotation.x = this.jawOpen * 0.5;
-        }
-        // Orbit flight
+        if (jaw) jaw.position.y = -0.05 + Math.sin(this.time * 1.2) * 0.05;
+
+        // Orbit flight pattern
         this.orbitAngle += dt * 0.3;
-        const p = this.mesh.position;
-        const tx = this.orbitCenter.x + Math.cos(this.orbitAngle)*25;
-        const tz = this.orbitCenter.z + Math.sin(this.orbitAngle)*25;
-        const ty = 35 + Math.sin(this.time*0.5)*5;
-        p.x += (tx-p.x)*dt*2; p.y += (ty-p.y)*dt*2; p.z += (tz-p.z)*dt*2;
-        this.mesh.rotation.y = this.orbitAngle + Math.PI/2;
-        this.mesh.rotation.z = Math.sin(this.orbitAngle)*0.12;
-        // Slight pitch during flight
-        this.mesh.rotation.x = Math.sin(this.time*0.5)*0.05;
+        const targetX = this.orbitCenter.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+        const targetZ = this.orbitCenter.z + Math.sin(this.orbitAngle) * this.orbitRadius;
+        const targetY = this.orbitY + Math.sin(this.time * 0.5) * 5;
+
+        const pos = this.mesh.position;
+        pos.x += (targetX - pos.x) * dt * 2;
+        pos.y += (targetY - pos.y) * dt * 2;
+        pos.z += (targetZ - pos.z) * dt * 2;
+
+        // Face flight direction
+        const yaw = this.orbitAngle + Math.PI / 2;
+        this.mesh.rotation.y = yaw;
+        this.mesh.rotation.z = Math.sin(this.orbitAngle) * 0.15;
     }
-    takeDamage(n) { this.hp -= n; if (this.hp<=0) this.alive=false; }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp <= 0) {
+            this.alive = false;
+        }
+    }
 }
 
-// ==================== ENTITY MANAGER ====================
+// ============================================================
+// Entity Manager
+// ============================================================
+
 export class EntityManager {
     constructor(scene, world) {
         this.scene = scene;
         this.world = world;
         this.entities = [];
-        this.timers = { clione:0, meowl:0, bloop:0, ghast:5, guardian:8 };
-        this.max = { clione:12, meowl:3, bloop:2, ghast:2, guardian:2 };
+        this.spawnCheckTimer = 0;
+        this.bloopSpawnTimer = 0;
+        this.meowlSpawnTimer = 0;
+        this.maxCliones = 12;
+        this.maxBloops = 2;
+        this.maxMeowls = 3;
+        this.maxGhasts = 2;
+        this.maxGuardians = 2;
+        this.ghastSpawnTimer = 5;
+        this.guardianSpawnTimer = 8;
         this.dragonSpawned = false;
     }
 
-    spawn(Type, x, y, z, ...args) {
-        const e = new Type(x, y, z, ...args);
-        this.entities.push(e);
-        this.scene.add(e.mesh);
-        return e;
-    }
-    spawnClione(x,y,z) { return this.spawn(Clione,x,y,z); }
-    spawnMaja(x,y,z) { return this.spawn(ElGranMaja,x,y,z); }
-    spawnWither(x,y,z,s) { return this.spawn(Wither,x,y,z,s); }
-    spawnGhast(x,y,z) { return this.spawn(Ghast,x,y,z); }
-    spawnGuardian(x,y,z) { return this.spawn(Guardian,x,y,z); }
-    spawnEnderDragon(x,y,z) { return this.spawn(EnderDragon,x,y,z); }
-
-    _trySpawnInWater(px, pz, Type, type) {
-        let c=0; for (const e of this.entities) if(e.type===type && e.alive) c++;
-        if (c >= this.max[type]) return;
-        const a=Math.random()*Math.PI*2, d=10+Math.random()*20;
-        const sx=Math.floor(px+Math.cos(a)*d), sz=Math.floor(pz+Math.sin(a)*d);
-        for (let y=10;y<=18;y++) if (this.world.getBlock(sx,y,sz)===BlockType.WATER) { this.spawn(Type,sx,y,sz); return; }
+    spawnClione(x, y, z) {
+        const clione = new Clione(x, y, z);
+        this.entities.push(clione);
+        this.scene.add(clione.mesh);
+        return clione;
     }
 
-    update(dt, px, py, pz, dimension) {
-        // Dimension spawning
-        if (dimension === 'overworld') {
-            this.timers.clione -= dt;
-            if (this.timers.clione<=0) { this._trySpawnInWater(px,pz,Clione,'clione'); this.timers.clione=2; }
-            this.timers.meowl -= dt;
-            if (this.timers.meowl<=0) {
-                let c=0; for(const e of this.entities) if(e.type==='meowl'&&e.alive) c++;
-                if (c<this.max.meowl) { const a=Math.random()*Math.PI*2, d=15+Math.random()*20; this.spawn(Meowl, px+Math.cos(a)*d, 30+Math.random()*15, pz+Math.sin(a)*d); }
-                this.timers.meowl = 6+Math.random()*6;
+    spawnMaja(x, y, z) {
+        const maja = new ElGranMaja(x, y, z);
+        this.entities.push(maja);
+        this.scene.add(maja.mesh);
+        return maja;
+    }
+
+    spawnWither(x, y, z, scale) {
+        const wither = new Wither(x, y, z, scale);
+        this.entities.push(wither);
+        this.scene.add(wither.mesh);
+        return wither;
+    }
+
+    spawnGhast(x, y, z) {
+        const g = new Ghast(x, y, z);
+        this.entities.push(g);
+        this.scene.add(g.mesh);
+        return g;
+    }
+
+    spawnGuardian(x, y, z) {
+        const g = new Guardian(x, y, z);
+        this.entities.push(g);
+        this.scene.add(g.mesh);
+        return g;
+    }
+
+    spawnEnderDragon(x, y, z) {
+        const d = new EnderDragon(x, y, z);
+        this.entities.push(d);
+        this.scene.add(d.mesh);
+        return d;
+    }
+
+    spawnBloop(x, y, z) {
+        const bloop = new Bloop(x, y, z);
+        this.entities.push(bloop);
+        this.scene.add(bloop.mesh);
+        return bloop;
+    }
+
+    tryNaturalSpawnClione(playerX, playerZ) {
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'clione' && e.alive) count++;
+        if (count >= this.maxCliones) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 10 + Math.random() * 20;
+        const sx = Math.floor(playerX + Math.cos(angle) * dist);
+        const sz = Math.floor(playerZ + Math.sin(angle) * dist);
+
+        for (let y = 10; y <= 20; y++) {
+            if (this.world.getBlock(sx, y, sz) === BlockType.WATER) {
+                this.spawnClione(sx, y, sz);
+                return;
             }
-            this.timers.bloop -= dt;
-            if (this.timers.bloop<=0) { this._trySpawnInWater(px,pz,Bloop,'bloop'); this.timers.bloop=10+Math.random()*10; }
-            this.timers.guardian -= dt;
-            if (this.timers.guardian<=0) { this._trySpawnInWater(px,pz,Guardian,'guardian'); this.timers.guardian=12+Math.random()*10; }
+        }
+    }
+
+    tryNaturalSpawnBloop(playerX, playerZ) {
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'bloop' && e.alive) count++;
+        if (count >= this.maxBloops) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 15 + Math.random() * 20;
+        const sx = Math.floor(playerX + Math.cos(angle) * dist);
+        const sz = Math.floor(playerZ + Math.sin(angle) * dist);
+
+        for (let y = 8; y <= 18; y++) {
+            if (this.world.getBlock(sx, y, sz) === BlockType.WATER) {
+                this.spawnBloop(sx, y, sz);
+                return;
+            }
+        }
+    }
+
+    tryNaturalSpawnMeowl(playerX, playerZ) {
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'meowl' && e.alive) count++;
+        if (count >= this.maxMeowls) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 15 + Math.random() * 20;
+        const sx = playerX + Math.cos(angle) * dist;
+        const sz = playerZ + Math.sin(angle) * dist;
+        const sy = 30 + Math.random() * 15;
+
+        const meowl = new Meowl(sx, sy, sz);
+        this.entities.push(meowl);
+        this.scene.add(meowl.mesh);
+    }
+
+    update(dt, playerX, playerY, playerZ, dimension) {
+        // Dimension-specific spawning
+        if (dimension === 'overworld') {
+            this.spawnCheckTimer -= dt;
+            if (this.spawnCheckTimer <= 0) { this.tryNaturalSpawnClione(playerX, playerZ); this.spawnCheckTimer = 2; }
+            this.meowlSpawnTimer -= dt;
+            if (this.meowlSpawnTimer <= 0) { this.tryNaturalSpawnMeowl(playerX, playerZ); this.meowlSpawnTimer = 6 + Math.random() * 6; }
+            this.bloopSpawnTimer -= dt;
+            if (this.bloopSpawnTimer <= 0) { this.tryNaturalSpawnBloop(playerX, playerZ); this.bloopSpawnTimer = 10 + Math.random() * 10; }
+            // Guardian in water
+            this.guardianSpawnTimer -= dt;
+            if (this.guardianSpawnTimer <= 0) {
+                let gc = 0; for (const e of this.entities) if (e.type === 'guardian' && e.alive) gc++;
+                if (gc < this.maxGuardians) {
+                    const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 20;
+                    const sx = Math.floor(playerX + Math.cos(a) * d), sz = Math.floor(playerZ + Math.sin(a) * d);
+                    for (let y = 10; y <= 18; y++) {
+                        if (this.world.getBlock(sx, y, sz) === BlockType.WATER) { this.spawnGuardian(sx, y, sz); break; }
+                    }
+                }
+                this.guardianSpawnTimer = 12 + Math.random() * 10;
+            }
         } else if (dimension === 'nether') {
-            this.timers.ghast -= dt;
-            if (this.timers.ghast<=0) {
-                let c=0; for(const e of this.entities) if(e.type==='ghast'&&e.alive) c++;
-                if (c<this.max.ghast) { const a=Math.random()*Math.PI*2, d=15+Math.random()*20; this.spawn(Ghast, px+Math.cos(a)*d, 25+Math.random()*15, pz+Math.sin(a)*d); }
-                this.timers.ghast = 8+Math.random()*8;
+            // Ghast spawning in nether
+            this.ghastSpawnTimer -= dt;
+            if (this.ghastSpawnTimer <= 0) {
+                let gc = 0; for (const e of this.entities) if (e.type === 'ghast' && e.alive) gc++;
+                if (gc < this.maxGhasts) {
+                    const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 20;
+                    const sx = playerX + Math.cos(a) * d, sz = playerZ + Math.sin(a) * d;
+                    this.spawnGhast(sx, 25 + Math.random() * 15, sz);
+                }
+                this.ghastSpawnTimer = 8 + Math.random() * 8;
             }
         } else if (dimension === 'ender') {
-            if (!this.dragonSpawned) { this.spawnEnderDragon(px, 35, pz); this.dragonSpawned = true; }
+            // Ender Dragon - one per visit
+            if (!this.dragonSpawned) {
+                this.spawnEnderDragon(playerX, 35, playerZ);
+                this.dragonSpawned = true;
+            }
         }
 
-        // Build helper lists
-        const cliones=[], majas=[];
-        for (const e of this.entities) { if(!e.alive) continue; if(e.type==='clione') cliones.push(e); else if(e.type==='maja') majas.push(e); }
+        const cliones = [];
+        const majas = [];
+        for (let i = 0; i < this.entities.length; i++) {
+            const e = this.entities[i];
+            if (!e.alive) continue;
+            if (e.type === 'clione') cliones.push(e);
+            else if (e.type === 'maja') majas.push(e);
+        }
 
         // Clean dead
-        let w=0;
-        for (let i=0;i<this.entities.length;i++) {
-            if (!this.entities[i].alive) { this.scene.remove(this.entities[i].mesh); continue; }
-            this.entities[w++] = this.entities[i];
+        let writeIdx = 0;
+        for (let i = 0; i < this.entities.length; i++) {
+            const entity = this.entities[i];
+            if (!entity.alive) { this.scene.remove(entity.mesh); continue; }
+            this.entities[writeIdx++] = entity;
         }
-        this.entities.length = w;
+        this.entities.length = writeIdx;
 
         // Update
-        for (let i=this.entities.length-1; i>=0; i--) {
-            const e = this.entities[i];
-            if (e.type==='maja') e.update(dt, this.world, cliones);
-            else if (e.type==='bloop') e.update(dt, this.world, cliones, majas);
-            else if (e.type==='wither') e.update(dt, this.world, this.entities, px, py, pz);
-            else if (e.type==='guardian') e.update(dt, this.world);
-            else if (e.type==='ghast'||e.type==='meowl'||e.type==='enderdragon') e.update(dt);
-            else e.update(dt, this.world);
+        for (let i = this.entities.length - 1; i >= 0; i--) {
+            const entity = this.entities[i];
 
-            // Despawn
-            if (e.type==='enderdragon' || e.tamed) continue;
-            const dx=e.mesh.position.x-px, dz=e.mesh.position.z-pz;
-            const maxD = (e.type==='wither'||e.type==='ghast') ? 120 : (e.type==='maja'||e.type==='bloop'||e.type==='guardian'||e.type==='meowl') ? 80 : 50;
-            if (dx*dx+dz*dz > maxD*maxD) { this.scene.remove(e.mesh); this.entities[i]=this.entities[this.entities.length-1]; this.entities.pop(); }
+            if (entity.type === 'maja') entity.update(dt, this.world, cliones);
+            else if (entity.type === 'bloop') entity.update(dt, this.world, cliones, majas);
+            else if (entity.type === 'wither') entity.update(dt, this.world, this.entities, playerX, playerY, playerZ);
+            else if (entity.type === 'ghast') entity.update(dt);
+            else if (entity.type === 'guardian') entity.update(dt, this.world);
+            else if (entity.type === 'enderdragon') entity.update(dt);
+            else if (entity.type === 'meowl') entity.update(dt);
+            else entity.update(dt, this.world);
+
+            const dx = entity.mesh.position.x - playerX;
+            const dz = entity.mesh.position.z - playerZ;
+            if (entity.type === 'enderdragon') continue; // dragon never despawns
+            if (entity.tamed) continue; // tamed never despawn
+            const maxD = (entity.type === 'wither' || entity.type === 'ghast') ? 120 : (entity.type === 'maja' || entity.type === 'bloop' || entity.type === 'guardian') ? 80 : (entity.type === 'meowl' ? 80 : 50);
+            if (dx * dx + dz * dz > maxD * maxD) {
+                this.scene.remove(entity.mesh);
+                this.entities[i] = this.entities[this.entities.length - 1];
+                this.entities.pop();
+            }
         }
     }
 }
