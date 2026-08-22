@@ -328,14 +328,34 @@ class Wither {
 // ==================== GHAST ====================
 function createGhastMesh() {
     const g = new THREE.Group();
-    g.add(box(2,2,2, 0xe8e8e8));
-    for (const sx of [-0.35,0.35]) g.add(glow(0.3,0.35,0.1, 0x222222)).position.set(sx,0.2,-1.05);
-    g.add(glow(0.4,0.25,0.1, 0x222222)).position.set(0,-0.25,-1.05);
-    for (const sx of [-0.35,0.35]) { const t=glow(0.08,0.2,0.05, 0x4444aa); t.position.set(sx,-0.1,-1.08); t.name=sx<0?'tearL':'tearR'; g.add(t); }
+    // Main body - large white cube with bumpy texture
+    g.add(box(2.2,2.2,2.2, 0xe8e8e8));
+    // Cheek bumps
+    g.add(box(0.3,0.3,0.15, 0xdddddd)).position.set(-0.7,0,-1.15);
+    g.add(box(0.3,0.3,0.15, 0xdddddd)).position.set(0.7,0,-1.15);
+    // Eyes - large sad drooping
+    for (const [sx,name] of [[-0.4,'eyeL'],[0.4,'eyeR']]) {
+        const eyeBg = box(0.4,0.45,0.1, 0xffffff); eyeBg.position.set(sx,0.25,-1.15); g.add(eyeBg);
+        const pupil = glow(0.2,0.3,0.12, 0x111111); pupil.position.set(sx,0.2,-1.18); pupil.name=name; g.add(pupil);
+        // Tear streak
+        const tear = glow(0.06,0.35,0.05, 0x5555cc); tear.position.set(sx,-0.1,-1.16); tear.name=`tear_${name}`; g.add(tear);
+    }
+    // Mouth - dark sad frown
+    g.add(glow(0.5,0.15,0.1, 0x333333)).position.set(0,-0.35,-1.15);
+    g.add(glow(0.35,0.08,0.1, 0x551111)).position.set(0,-0.3,-1.13);
+    // Tentacles - 9 long wavy ones
     for (let tx=-1;tx<=1;tx++) for (let tz=-1;tz<=1;tz++) {
-        const len=1.5+Math.random()*1.5;
-        const tent=box(0.2,len,0.2, 0xcccccc);
-        tent.position.set(tx*0.55,-1-len/2,tz*0.55); tent.name=`t${(tx+1)*3+(tz+1)}`; g.add(tent);
+        const tg = new THREE.Group(); tg.name=`tg${(tx+1)*3+(tz+1)}`;
+        tg.position.set(tx*0.6, -1.1, tz*0.6);
+        const segs = 3 + Math.floor(Math.random()*2);
+        for (let s=0;s<segs;s++) {
+            const w = 0.2 - s*0.03;
+            const seg = box(w, 0.6, w, s===0 ? 0xcccccc : 0xbbbbbb);
+            seg.position.y = -s*0.55;
+            seg.name = `ts${s}`;
+            tg.add(seg);
+        }
+        g.add(tg);
     }
     return g;
 }
@@ -347,7 +367,27 @@ class Ghast {
     update(dt) {
         if (!this.alive) return;
         this.time += dt;
-        for (let i=0;i<9;i++) { const t=this.mesh.getObjectByName(`t${i}`); if(t) t.rotation.x=Math.sin(this.time*1.5+i*0.7)*0.15; }
+        // Tentacle wave animation
+        for (let i=0;i<9;i++) {
+            const tg = this.mesh.getObjectByName(`tg${i}`);
+            if (!tg) continue;
+            tg.rotation.x = Math.sin(this.time*1.2+i*0.8)*0.12;
+            tg.rotation.z = Math.cos(this.time*0.9+i*1.1)*0.08;
+            for (let s=0;s<5;s++) {
+                const seg = tg.getObjectByName(`ts${s}`);
+                if (seg) seg.rotation.x = Math.sin(this.time*1.5+i+s*0.6)*0.1*(s+1);
+            }
+        }
+        // Tear drip
+        for (const n of ['tear_eyeL','tear_eyeR']) {
+            const t = this.mesh.getObjectByName(n);
+            if (t) t.position.y = -0.1 + Math.sin(this.time*2.5)*0.06;
+        }
+        // Eye tracking subtle
+        for (const n of ['eyeL','eyeR']) {
+            const e = this.mesh.getObjectByName(n);
+            if (e) e.position.x += Math.sin(this.time*0.8)*0.003;
+        }
         if (!this.tamed) wander(this, dt, 0.8);
         moveAndBob(this, dt, 0.8);
         const p = this.mesh.position;
@@ -360,13 +400,34 @@ class Ghast {
 // ==================== GUARDIAN ====================
 function createGuardianMesh() {
     const g = new THREE.Group();
-    const c=0x3a8a7a, d=0x2a5a5a;
-    const body = box(1.2,0.8,1.2, c); body.rotation.y=Math.PI/4; g.add(body);
-    g.add(box(0.35,0.35,0.1, 0xeeeeee)).position.set(0,0.05,-0.65);
-    const eye = glow(0.2,0.2,0.12, 0xdd6622); eye.position.set(0,0.05,-0.68); eye.name='eye'; g.add(eye);
-    const dirs = [[0,0.55,0],[0,-0.55,0],[0.7,0,0],[-0.7,0,0],[0,0,0.7],[0,0,-0.7]];
-    dirs.forEach(([x,y,z],i) => { const sp=box(0.15,0.3,0.15,d); sp.position.set(x,y,z); sp.name=`sp${i}`; g.add(sp); });
-    const tail = box(0.2,0.15,0.5, c); tail.position.set(0,0,0.85); tail.name='tail'; g.add(tail);
+    const teal=0x3a8a7a, dark=0x2a5a5a, orange=0xdd6622;
+    // Main body - rotated cube (diamond)
+    const body = box(1.4,1.0,1.4, teal); body.rotation.y=Math.PI/4; g.add(body);
+    // Inner body detail
+    const inner = box(1.0,0.7,1.0, 0x4a9a8a); inner.rotation.y=Math.PI/4; g.add(inner);
+    // Eye - large single cyclopean eye
+    g.add(box(0.45,0.45,0.08, 0xf0f0f0)).position.set(0,0.05,-0.75);
+    const iris = glow(0.25,0.25,0.1, orange); iris.position.set(0,0.05,-0.78); iris.name='iris'; g.add(iris);
+    const pupil = glow(0.1,0.18,0.11, 0x111111); pupil.position.set(0,0.05,-0.8); pupil.name='pupil'; g.add(pupil);
+    // Spikes - 12 retractable spines
+    const spines = [
+        [0,0.7,0], [0,-0.7,0],
+        [0.8,0,0], [-0.8,0,0], [0,0,0.8], [0,0,-0.8],
+        [0.5,0.4,0.5], [-0.5,0.4,-0.5], [0.5,-0.4,-0.5], [-0.5,-0.4,0.5],
+        [0.5,0.4,-0.5], [-0.5,-0.4,-0.5],
+    ];
+    spines.forEach(([sx,sy,sz],i) => {
+        const spine = box(0.12,0.35,0.12, dark);
+        spine.position.set(sx,sy,sz);
+        spine.lookAt(sx*3,sy*3,sz*3);
+        spine.name=`sp${i}`;
+        g.add(spine);
+    });
+    // Tail fin
+    const tail = box(0.25,0.2,0.6, teal); tail.position.set(0,0,1.0); tail.name='tail'; g.add(tail);
+    const tailTip = box(0.4,0.15,0.3, dark); tailTip.position.set(0,0,1.35); tailTip.name='tailTip'; g.add(tailTip);
+    // Beam emitter (orange dot under eye)
+    const beam = glow(0.08,0.08,0.08, 0xff8800); beam.position.set(0,-0.2,-0.75); beam.name='beam'; g.add(beam);
     return g;
 }
 class Guardian {
@@ -377,9 +438,29 @@ class Guardian {
     update(dt, world) {
         if (!this.alive) return;
         this.time += dt;
-        const eye=this.mesh.getObjectByName('eye'); if(eye) eye.position.x=Math.sin(this.time*1.5)*0.05;
-        for (let i=0;i<6;i++) { const sp=this.mesh.getObjectByName(`sp${i}`); if(sp) { const s=1+Math.sin(this.time*2+i)*0.15; sp.scale.setScalar(s); } }
-        const tail=this.mesh.getObjectByName('tail'); if(tail) tail.rotation.y=Math.sin(this.time*3)*0.4;
+        // Eye tracking
+        const iris = this.mesh.getObjectByName('iris');
+        const pupil = this.mesh.getObjectByName('pupil');
+        if (iris) iris.position.x = Math.sin(this.time*1.2)*0.06;
+        if (pupil) pupil.position.x = Math.sin(this.time*1.2)*0.06;
+        // Spine pulse - extend/retract
+        for (let i=0;i<12;i++) {
+            const sp = this.mesh.getObjectByName(`sp${i}`);
+            if (sp) {
+                const pulse = 1 + Math.sin(this.time*2.5+i*0.5)*0.25;
+                sp.scale.y = pulse;
+            }
+        }
+        // Tail swish
+        const tail = this.mesh.getObjectByName('tail');
+        const tailTip = this.mesh.getObjectByName('tailTip');
+        if (tail) tail.rotation.y = Math.sin(this.time*3)*0.5;
+        if (tailTip) tailTip.rotation.y = Math.sin(this.time*3+0.5)*0.6;
+        // Beam pulse
+        const beam = this.mesh.getObjectByName('beam');
+        if (beam) beam.material.opacity = 0.5 + Math.sin(this.time*4)*0.5;
+        // Body slow rotation
+        this.mesh.rotation.x = Math.sin(this.time*0.5)*0.05;
         if (!this.tamed) wander(this, dt, 0.6);
         moveAndBob(this, dt, 1);
         faceDir(this.mesh, this.velocity.x, this.velocity.z, dt);
@@ -390,25 +471,108 @@ class Guardian {
 // ==================== ENDER DRAGON ====================
 function createEnderDragonMesh() {
     const g = new THREE.Group();
-    const bk=0x111118, pu=0x6622aa, ey=0xcc44ff;
-    g.add(box(1.2,0.8,1.5, bk)).position.set(0,0.5,-2.5);
-    g.add(box(0.8,0.5,0.8, bk)).position.set(0,0.3,-3.4);
-    for (const sx of [-0.35,0.35]) g.add(glow(0.25,0.2,0.1, ey)).position.set(sx,0.65,-3.25);
-    const jaw=box(0.7,0.2,0.7, 0x1a1a25); jaw.position.set(0,0,-3.3); jaw.name='jaw'; g.add(jaw);
-    for (const sx of [-0.35,0.35]) { const h=box(0.15,0.5,0.15, 0x333340); h.position.set(sx,1.0,-2.3); h.rotation.x=-0.3; g.add(h); }
-    for (let i=0;i<3;i++) { const n=box(0.7+i*0.1,0.6,0.6,bk); n.position.set(0,0.3-i*0.05,-1.5+i*0.5); n.name=`neck${i}`; g.add(n); }
-    g.add(box(2,1.2,3, bk)).position.set(0,0,0.5);
-    for (let i=0;i<6;i++) { g.add(box(0.15,0.3+(3-Math.abs(i-2.5))*0.1,0.3, pu)).position.set(0,0.7,-1+i*0.6); }
-    // Wings
-    const wm = new THREE.MeshLambertMaterial({color:pu, transparent:true, opacity:0.5, side:THREE.DoubleSide});
-    for (const [sx,name] of [[-1,'wingL'],[1,'wingR']]) {
-        const wg = new THREE.Group(); wg.name=name; wg.position.set(sx,0.5,0);
-        wg.add(box(3,0.12,0.2, 0x1a1a25)).position.set(sx*1.5,0,0);
-        const mem = new THREE.Mesh(new THREE.BoxGeometry(3,0.05,1.8), wm); mem.position.set(sx*1.5,-0.05,0.4); wg.add(mem);
+    const bk=0x111118, dk=0x0a0a12, pu=0x6622aa, ey=0xcc44ff;
+
+    // HEAD - angular dragon skull
+    const skull = box(1.4,0.9,1.6, bk); skull.position.set(0,0.5,-2.5); g.add(skull);
+    // Brow ridge
+    g.add(box(1.5,0.2,0.6, dk)).position.set(0,0.95,-2.3);
+    // Snout
+    const snout = box(0.9,0.6,1.0, bk); snout.position.set(0,0.25,-3.3); g.add(snout);
+    // Nostrils
+    for (const sx of [-0.2,0.2]) g.add(glow(0.1,0.08,0.08, 0x331155)).position.set(sx,0.45,-3.82);
+    // Eyes - large glowing purple
+    for (const sx of [-0.4,0.4]) {
+        g.add(box(0.3,0.25,0.1, 0x220044)).position.set(sx,0.7,-3.25);
+        g.add(glow(0.22,0.18,0.12, ey)).position.set(sx,0.7,-3.28);
+    }
+    // Jaw
+    const jawG = new THREE.Group(); jawG.name='jaw'; jawG.position.set(0,0,-3.0);
+    jawG.add(box(0.8,0.2,0.8, dk));
+    // Teeth
+    for (let i=-3;i<=3;i++) {
+        const t = new THREE.Mesh(new THREE.ConeGeometry(0.04,0.12,4), new THREE.MeshLambertMaterial({color:0xddddcc}));
+        t.position.set(i*0.1, 0.12, -0.35); jawG.add(t);
+        const t2 = t.clone(); t2.position.set(i*0.1, -0.05, -0.35); t2.rotation.x=Math.PI; jawG.add(t2);
+    }
+    g.add(jawG);
+    // Horns - curved back
+    for (const sx of [-0.45,0.45]) {
+        const h1 = box(0.12,0.55,0.15, 0x333340); h1.position.set(sx,1.05,-2.2); h1.rotation.x=-0.4; g.add(h1);
+        const h2 = box(0.08,0.3,0.1, 0x444450); h2.position.set(sx,1.35,-2.0); h2.rotation.x=-0.6; g.add(h2);
+    }
+
+    // NECK - 4 segments, flexible
+    for (let i=0;i<4;i++) {
+        const w = 0.8+i*0.15;
+        const n = box(w,0.65,0.55, bk);
+        n.position.set(0, 0.35-i*0.04, -1.6+i*0.45);
+        n.name=`neck${i}`;
+        g.add(n);
+    }
+
+    // BODY - large thorax
+    g.add(box(2.2,1.4,3.2, bk)).position.set(0,0,0.5);
+    // Belly (slightly lighter)
+    g.add(box(1.6,0.15,2.8, 0x1a1a28)).position.set(0,-0.7,0.5);
+
+    // Spine ridge - purple spines along back
+    for (let i=0;i<8;i++) {
+        const h = 0.2 + Math.sin(i/7*Math.PI)*0.25;
+        const spine = box(0.12, h, 0.2, pu);
+        spine.position.set(0, 0.75+h/2, -1.5+i*0.55);
+        g.add(spine);
+    }
+
+    // WINGS - large with bone structure and membrane
+    const wingBone = new THREE.MeshLambertMaterial({color:dk});
+    const wingMem = new THREE.MeshLambertMaterial({color:pu, transparent:true, opacity:0.45, side:THREE.DoubleSide});
+    for (const [sx,name] of [[-1.1,'wingL'],[1.1,'wingR']]) {
+        const wg = new THREE.Group(); wg.name=name; wg.position.set(sx,0.6,0);
+        const dir = sx<0 ? -1 : 1;
+        // Upper arm bone
+        const arm = box(2.5,0.15,0.2, 0, {color:dk}); arm.material = wingBone;
+        arm.position.set(dir*1.25,0,0); wg.add(arm);
+        // Forearm
+        const fore = box(2.0,0.1,0.15, 0, {color:dk}); fore.material = wingBone;
+        fore.position.set(dir*2.6,-0.15,0.3); fore.rotation.z=dir*0.15; wg.add(fore);
+        // Membrane
+        const mem1 = new THREE.Mesh(new THREE.BoxGeometry(2.8,0.04,2.0), wingMem);
+        mem1.position.set(dir*1.5,-0.1,0.5); wg.add(mem1);
+        const mem2 = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.04,1.4), wingMem);
+        mem2.position.set(dir*2.8,-0.2,0.6); wg.add(mem2);
+        // Wing finger tips
+        for (let f=0;f<3;f++) {
+            const finger = box(0.06, 0.06, 1.0+f*0.3, dk);
+            finger.position.set(dir*(1.0+f*0.7), -0.05, 1.2+f*0.15);
+            wg.add(finger);
+        }
         g.add(wg);
     }
-    for (let i=0;i<4;i++) { const s=0.6-i*0.12; const t=box(s,s*0.6,0.8,bk); t.position.set(0,-0.1-i*0.1,2.2+i*0.7); t.name=`tail${i}`; g.add(t); }
-    for (const sx of [-0.6,0.6]) { g.add(box(0.3,0.8,0.3, 0x1a1a25)).position.set(sx,-0.9,0.2); g.add(box(0.4,0.1,0.5, 0x1a1a25)).position.set(sx,-1.35,0.1); }
+
+    // TAIL - 5 segments tapering
+    for (let i=0;i<5;i++) {
+        const s = 0.7-i*0.12;
+        const t = box(s, s*0.55, 0.8, bk);
+        t.position.set(0, -0.1-i*0.08, 2.3+i*0.7);
+        t.name=`tail${i}`;
+        g.add(t);
+    }
+    // Tail spike
+    const spike = box(0.15,0.15,0.4, pu); spike.position.set(0,-0.5,5.8); spike.name='tailSpike'; g.add(spike);
+
+    // LEGS - front & back
+    for (const [lx,lz,scale] of [[-0.7,0.0,1],[ 0.7,0.0,1],[-0.5,1.8,0.8],[0.5,1.8,0.8]]) {
+        const thigh = box(0.25*scale,0.7*scale,0.25*scale, dk); thigh.position.set(lx,-0.8,lz); g.add(thigh);
+        const shin = box(0.2*scale,0.5*scale,0.2*scale, dk); shin.position.set(lx,-1.25,lz+0.1); g.add(shin);
+        // Claws
+        for (let c=-1;c<=1;c++) {
+            const claw = box(0.06*scale,0.08*scale,0.15*scale, 0x333340);
+            claw.position.set(lx+c*0.08*scale, -1.5*scale+0.05, lz-0.05);
+            g.add(claw);
+        }
+    }
+
     return g;
 }
 class EnderDragon {
@@ -418,16 +582,35 @@ class EnderDragon {
         this.hp = 100;
         this.orbitAngle = 0;
         this.orbitCenter = new THREE.Vector3(x, 0, z);
+        this.jawOpen = 0;
     }
     update(dt) {
         if (!this.alive) return;
         this.time += dt;
+        // Wing flap
         const wL=this.mesh.getObjectByName('wingL'), wR=this.mesh.getObjectByName('wingR');
-        if (wL) wL.rotation.z = Math.sin(this.time*2.5)*0.5;
-        if (wR) wR.rotation.z = -Math.sin(this.time*2.5)*0.5;
-        for (let i=0;i<4;i++) { const t=this.mesh.getObjectByName(`tail${i}`); if(t) t.position.x=Math.sin(this.time*2+i*0.8)*0.15*(i+1); }
-        for (let i=0;i<3;i++) { const n=this.mesh.getObjectByName(`neck${i}`); if(n) n.position.x=Math.sin(this.time*1.5+i*0.5)*0.08; }
-        const jaw=this.mesh.getObjectByName('jaw'); if(jaw) jaw.position.y=-0.05+Math.sin(this.time*1.2)*0.05;
+        if (wL) wL.rotation.z = Math.sin(this.time*2.5)*0.55;
+        if (wR) wR.rotation.z = -Math.sin(this.time*2.5)*0.55;
+        // Tail wave
+        for (let i=0;i<5;i++) {
+            const t=this.mesh.getObjectByName(`tail${i}`);
+            if(t) t.position.x = Math.sin(this.time*1.8+i*0.7)*0.12*(i+1);
+        }
+        const spike = this.mesh.getObjectByName('tailSpike');
+        if (spike) spike.position.x = Math.sin(this.time*1.8+4)*0.5;
+        // Neck wave
+        for (let i=0;i<4;i++) {
+            const n=this.mesh.getObjectByName(`neck${i}`);
+            if(n) n.position.x = Math.sin(this.time*1.5+i*0.4)*0.06*(i+1);
+        }
+        // Jaw open/close
+        const jaw = this.mesh.getObjectByName('jaw');
+        if (jaw) {
+            this.jawOpen = Math.max(0, Math.sin(this.time*0.8)*0.15);
+            jaw.position.y = -this.jawOpen;
+            jaw.rotation.x = this.jawOpen * 0.5;
+        }
+        // Orbit flight
         this.orbitAngle += dt * 0.3;
         const p = this.mesh.position;
         const tx = this.orbitCenter.x + Math.cos(this.orbitAngle)*25;
@@ -435,7 +618,9 @@ class EnderDragon {
         const ty = 35 + Math.sin(this.time*0.5)*5;
         p.x += (tx-p.x)*dt*2; p.y += (ty-p.y)*dt*2; p.z += (tz-p.z)*dt*2;
         this.mesh.rotation.y = this.orbitAngle + Math.PI/2;
-        this.mesh.rotation.z = Math.sin(this.orbitAngle)*0.15;
+        this.mesh.rotation.z = Math.sin(this.orbitAngle)*0.12;
+        // Slight pitch during flight
+        this.mesh.rotation.x = Math.sin(this.time*0.5)*0.05;
     }
     takeDamage(n) { this.hp -= n; if (this.hp<=0) this.alive=false; }
 }
