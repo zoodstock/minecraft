@@ -454,9 +454,7 @@ function gameLoop(time) {
             // 불로 가스트 길들이기 + 타기
             if (currentItem === ITEM_FIRE && nearEntity && nearEntity.type === 'ghast' && !nearEntity.tamed) {
                 nearEntity.tamed = true;
-                const ind = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3), new THREE.MeshBasicMaterial({color:0x00ff44}));
-                ind.position.set(0, 1.3, 0); ind.rotation.set(Math.PI/4, Math.PI/4, 0);
-                nearEntity.mesh.add(ind);
+                nearEntity.makeHappy();
                 interactCooldown = 0.5; handled = true;
             }
             // 길들인 가스트 타기 (아무 아이템으로 터치)

@@ -1220,7 +1220,97 @@ class Ghast {
         this.dirChangeTimer = 3 + Math.random() * 4;
         this.alive = true;
         this.tamed = false;
-        this.rider = null; // player reference when riding
+        this.happy = false;
+        this.rider = null;
+    }
+
+    makeHappy() {
+        this.happy = true;
+        // Replace sad face with happy face
+        // Remove tears
+        for (const n of ['tear_eyeL','tear_eyeR']) {
+            const t = this.mesh.getObjectByName(n);
+            if (t) { t.parent.remove(t); }
+        }
+        // Replace sad eyes with happy ^^ eyes
+        for (const n of ['eyeL','eyeR']) {
+            const old = this.mesh.getObjectByName(n);
+            if (old) {
+                const pos = old.position.clone();
+                old.parent.remove(old);
+                // Happy curved eye (^)
+                const eyeTop = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.25, 0.06, 0.12),
+                    new THREE.MeshBasicMaterial({ color: 0x111111 })
+                );
+                eyeTop.position.copy(pos);
+                eyeTop.position.y += 0.05;
+                eyeTop.name = n;
+                this.mesh.add(eyeTop);
+                const eyeL = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.06, 0.12, 0.12),
+                    new THREE.MeshBasicMaterial({ color: 0x111111 })
+                );
+                eyeL.position.copy(pos);
+                eyeL.position.x -= 0.1;
+                eyeL.position.y -= 0.02;
+                this.mesh.add(eyeL);
+                const eyeR = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.06, 0.12, 0.12),
+                    new THREE.MeshBasicMaterial({ color: 0x111111 })
+                );
+                eyeR.position.copy(pos);
+                eyeR.position.x += 0.1;
+                eyeR.position.y -= 0.02;
+                this.mesh.add(eyeR);
+            }
+        }
+        // Add blush (pink cheeks)
+        const blushMat = new THREE.MeshLambertMaterial({ color: 0xffaaaa, transparent: true, opacity: 0.5 });
+        const blushL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.15, 0.06), blushMat);
+        blushL.position.set(-0.5, -0.05, -1.16);
+        this.mesh.add(blushL);
+        const blushR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.15, 0.06), blushMat);
+        blushR.position.set(0.5, -0.05, -1.16);
+        this.mesh.add(blushR);
+        // Replace sad mouth with smile
+        // Find and remove old mouth meshes at mouth area
+        const toRemove = [];
+        this.mesh.children.forEach(c => {
+            if (c.position && Math.abs(c.position.z + 1.15) < 0.05 && c.position.y < -0.2 && c.position.y > -0.4) {
+                toRemove.push(c);
+            }
+        });
+        toRemove.forEach(c => this.mesh.remove(c));
+        // Smile
+        const smile = new THREE.Mesh(
+            new THREE.BoxGeometry(0.35, 0.08, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0x333333 })
+        );
+        smile.position.set(0, -0.3, -1.15);
+        this.mesh.add(smile);
+        const smileL = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.08, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0x333333 })
+        );
+        smileL.position.set(-0.18, -0.25, -1.15);
+        this.mesh.add(smileL);
+        const smileR = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.08, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0x333333 })
+        );
+        smileR.position.set(0.18, -0.25, -1.15);
+        this.mesh.add(smileR);
+        // Tame indicator
+        const ind = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.3, 0.3),
+            new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+        );
+        ind.position.set(0, 1.4, 0);
+        ind.rotation.set(Math.PI / 4, Math.PI / 4, 0);
+        this.mesh.add(ind);
+        // Make body slightly pink tinted
+        this.mesh.children[0].material = new THREE.MeshLambertMaterial({ color: 0xf0e0e8 });
     }
 
     update(dt) {
@@ -1238,15 +1328,13 @@ class Ghast {
                 if (seg) seg.rotation.x = Math.sin(this.time * 1.5 + i + s * 0.6) * 0.1 * (s + 1);
             }
         }
-        // Tear drip
-        for (const n of ['tear_eyeL', 'tear_eyeR']) {
-            const t = this.mesh.getObjectByName(n);
-            if (t) t.position.y = -0.1 + Math.sin(this.time * 2.5) * 0.06;
-        }
-        // Eye tracking
-        for (const n of ['eyeL', 'eyeR']) {
-            const e = this.mesh.getObjectByName(n);
-            if (e) e.position.x += Math.sin(this.time * 0.8) * 0.003;
+
+        if (!this.happy) {
+            // Tear drip (only when sad)
+            for (const n of ['tear_eyeL', 'tear_eyeR']) {
+                const t = this.mesh.getObjectByName(n);
+                if (t) t.position.y = -0.1 + Math.sin(this.time * 2.5) * 0.06;
+            }
         }
 
         if (!this.tamed) {
