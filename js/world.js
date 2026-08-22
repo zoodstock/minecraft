@@ -88,6 +88,60 @@ export class World {
                         if (data[idx] === BlockType.AIR) data[idx] = BlockType.LEAVES;
                     }
                 }
+
+                // 네더포탈 폐허 (매우 희귀)
+                if (height > WATER_LEVEL + 2 && Math.random() < 0.0004 &&
+                    x > 3 && x < CHUNK_SIZE - 4 && z > 1 && z < CHUNK_SIZE - 2) {
+                    // 흑요석 프레임 (4x5, 일부 파괴됨)
+                    const by = height + 1;
+                    for (let py = 0; py < 5; py++) {
+                        const y = by + py;
+                        if (y >= CHUNK_HEIGHT) continue;
+                        // 좌우 기둥
+                        if (Math.random() > 0.2) data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.OBSIDIAN;
+                        if (Math.random() > 0.2) data[(x+3) * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.OBSIDIAN;
+                    }
+                    // 위아래 가로대
+                    for (let px = 0; px <= 3; px++) {
+                        if (Math.random() > 0.25) data[(x+px) * CHUNK_HEIGHT * CHUNK_SIZE + by * CHUNK_SIZE + z] = BlockType.OBSIDIAN;
+                        if (Math.random() > 0.3) data[(x+px) * CHUNK_HEIGHT * CHUNK_SIZE + (by+4) * CHUNK_SIZE + z] = BlockType.OBSIDIAN;
+                    }
+                    // 안쪽에 포탈 블록 일부 (절반만 남아있음)
+                    for (let px = 1; px <= 2; px++) {
+                        for (let py = 1; py <= 3; py++) {
+                            if (Math.random() > 0.4) {
+                                const y = by + py;
+                                if (y < CHUNK_HEIGHT) data[(x+px) * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.NETHER_PORTAL;
+                            }
+                        }
+                    }
+                }
+
+                // 허공 지형 - 엔드 스톤 떠있는 섬 (희귀)
+                const voidNoise = this.noise.noise2D(wx * 0.008 + 200, wz * 0.008 + 200);
+                if (voidNoise > 0.65 && height > WATER_LEVEL + 5) {
+                    // 지면을 엔드 스톤으로 대체하고 아래를 비움
+                    const islandH = height;
+                    const thickness = 2 + Math.floor(Math.abs(this.noise.noise2D(wx * 0.05 + 200, wz * 0.05 + 200)) * 3);
+
+                    // 기존 블록 제거 (아래를 허공으로)
+                    for (let y = 0; y < islandH - thickness; y++) {
+                        data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.AIR;
+                    }
+                    // 엔드 스톤 섬
+                    for (let y = islandH - thickness; y <= islandH; y++) {
+                        if (y >= 0 && y < CHUNK_HEIGHT) {
+                            data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.END_STONE;
+                        }
+                    }
+                    // 표면에 퍼퍼 건물 (매우 드물게)
+                    if (Math.random() < 0.008 && x > 1 && x < CHUNK_SIZE - 2 && z > 1 && z < CHUNK_SIZE - 2) {
+                        for (let py = 1; py <= 4; py++) {
+                            const y = islandH + py;
+                            if (y < CHUNK_HEIGHT) data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.PURPUR;
+                        }
+                    }
+                }
             }
         }
         return data;
