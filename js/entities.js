@@ -1171,6 +1171,423 @@ class Wither {
 }
 
 // ============================================================
+// Ghast - Nether flying mob, tame with Fire to ride
+// ============================================================
+
+function createGhastMesh() {
+    const group = new THREE.Group();
+    const white = 0xe8e8e8;
+
+    // Body - large cube
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(2, 2, 2),
+        new THREE.MeshLambertMaterial({ color: white })
+    );
+    group.add(body);
+
+    // Eyes - sad/crying
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.1), eyeMat);
+    eyeL.position.set(-0.35, 0.2, -1.05);
+    group.add(eyeL);
+    const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.1), eyeMat);
+    eyeR.position.set(0.35, 0.2, -1.05);
+    group.add(eyeR);
+
+    // Mouth
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.1), eyeMat);
+    mouth.position.set(0, -0.25, -1.05);
+    group.add(mouth);
+
+    // Tears
+    const tearMat = new THREE.MeshBasicMaterial({ color: 0x4444aa });
+    const tearL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.05), tearMat);
+    tearL.position.set(-0.35, -0.1, -1.08);
+    tearL.name = 'tearL';
+    group.add(tearL);
+    const tearR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.05), tearMat);
+    tearR.position.set(0.35, -0.1, -1.08);
+    tearR.name = 'tearR';
+    group.add(tearR);
+
+    // Tentacles (9 hanging)
+    const tentMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+    for (let tx = -1; tx <= 1; tx++) {
+        for (let tz = -1; tz <= 1; tz++) {
+            const len = 1.5 + Math.random() * 1.5;
+            const tent = new THREE.Mesh(new THREE.BoxGeometry(0.2, len, 0.2), tentMat);
+            tent.position.set(tx * 0.55, -1 - len / 2, tz * 0.55);
+            tent.name = `tent${(tx+1)*3+(tz+1)}`;
+            group.add(tent);
+        }
+    }
+
+    return group;
+}
+
+class Ghast {
+    constructor(x, y, z) {
+        this.type = 'ghast';
+        this.mesh = createGhastMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3((Math.random()-0.5)*0.8, 0, (Math.random()-0.5)*0.8);
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 3 + Math.random() * 4;
+        this.alive = true;
+        this.tamed = false;
+        this.rider = null; // player reference when riding
+    }
+
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Tentacle sway
+        for (let i = 0; i < 9; i++) {
+            const tent = this.mesh.getObjectByName(`tent${i}`);
+            if (tent) tent.rotation.x = Math.sin(this.time * 1.5 + i * 0.7) * 0.15;
+        }
+        // Tear animation
+        const tearL = this.mesh.getObjectByName('tearL');
+        const tearR = this.mesh.getObjectByName('tearR');
+        if (tearL) tearL.position.y = -0.1 + Math.sin(this.time * 2) * 0.05;
+        if (tearR) tearR.position.y = -0.1 + Math.sin(this.time * 2 + 1) * 0.05;
+
+        if (!this.tamed) {
+            // Idle float
+            this.dirChangeTimer -= dt;
+            if (this.dirChangeTimer <= 0) {
+                this.velocity.x = (Math.random()-0.5) * 0.8;
+                this.velocity.z = (Math.random()-0.5) * 0.8;
+                this.velocity.y = (Math.random()-0.5) * 0.3;
+                this.dirChangeTimer = 3 + Math.random() * 4;
+            }
+        }
+
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+        pos.y += Math.sin(this.time * 0.8) * 0.01;
+
+        if (pos.y < 15) this.velocity.y = Math.abs(this.velocity.y) + 0.2;
+        if (pos.y > 45) this.velocity.y = -Math.abs(this.velocity.y) - 0.2;
+
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
+    }
+}
+
+// ============================================================
+// Guardian - Ocean mob, tame with Clione egg -> creates End Portal
+// ============================================================
+
+function createGuardianMesh() {
+    const group = new THREE.Group();
+    const teal = 0x3a8a7a;
+    const dark = 0x2a5a5a;
+    const orange = 0xdd6622;
+
+    // Body - spiky diamond shape
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 0.8, 1.2),
+        new THREE.MeshLambertMaterial({ color: teal })
+    );
+    body.rotation.y = Math.PI / 4;
+    group.add(body);
+
+    // Eye - single large orange
+    const eyeBg = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.1), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
+    eyeBg.position.set(0, 0.05, -0.65);
+    group.add(eyeBg);
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.12), new THREE.MeshBasicMaterial({ color: orange }));
+    eye.position.set(0, 0.05, -0.68);
+    eye.name = 'eye';
+    group.add(eye);
+
+    // Spikes
+    const spikeMat = new THREE.MeshLambertMaterial({ color: dark });
+    const spikePositions = [
+        [0, 0.55, 0], [0, -0.55, 0],
+        [0.7, 0, 0], [-0.7, 0, 0],
+        [0, 0, 0.7], [0, 0, -0.7],
+        [0.5, 0.35, 0.5], [-0.5, 0.35, -0.5],
+        [0.5, -0.35, -0.5], [-0.5, -0.35, 0.5],
+    ];
+    spikePositions.forEach(([sx, sy, sz], i) => {
+        const spike = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.15), spikeMat);
+        spike.position.set(sx, sy, sz);
+        spike.lookAt(sx * 2, sy * 2, sz * 2);
+        spike.name = `spike${i}`;
+        group.add(spike);
+    });
+
+    // Tail
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.5), new THREE.MeshLambertMaterial({ color: teal }));
+    tail.position.set(0, 0, 0.85);
+    tail.name = 'tail';
+    group.add(tail);
+
+    return group;
+}
+
+class Guardian {
+    constructor(x, y, z) {
+        this.type = 'guardian';
+        this.mesh = createGuardianMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3((Math.random()-0.5)*0.6, 0, (Math.random()-0.5)*0.6);
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 2 + Math.random() * 4;
+        this.alive = true;
+        this.tamed = false;
+    }
+
+    update(dt, world) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Eye tracking animation
+        const eye = this.mesh.getObjectByName('eye');
+        if (eye) eye.position.x = Math.sin(this.time * 1.5) * 0.05;
+
+        // Spike pulse
+        for (let i = 0; i < 10; i++) {
+            const spike = this.mesh.getObjectByName(`spike${i}`);
+            if (spike) {
+                const s = 1 + Math.sin(this.time * 2 + i) * 0.15;
+                spike.scale.set(s, s, s);
+            }
+        }
+        // Tail
+        const tail = this.mesh.getObjectByName('tail');
+        if (tail) tail.rotation.y = Math.sin(this.time * 3) * 0.4;
+
+        if (!this.tamed) {
+            this.dirChangeTimer -= dt;
+            if (this.dirChangeTimer <= 0) {
+                this.velocity.x = (Math.random()-0.5) * 0.6;
+                this.velocity.z = (Math.random()-0.5) * 0.6;
+                this.velocity.y = (Math.random()-0.5) * 0.2;
+                this.dirChangeTimer = 2 + Math.random() * 4;
+            }
+        }
+
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+        pos.y += Math.sin(this.time) * 0.01;
+
+        // Stay in water
+        const bx = Math.floor(pos.x+0.5), by = Math.floor(pos.y+0.5), bz = Math.floor(pos.z+0.5);
+        if (world.getBlock(bx, by, bz) !== BlockType.WATER) {
+            if (world.getBlock(bx, by+1, bz) === BlockType.WATER) this.velocity.y = 0.3;
+            else if (world.getBlock(bx, by-1, bz) === BlockType.WATER) this.velocity.y = -0.3;
+            else { this.velocity.x *= -1; this.velocity.z *= -1; }
+        }
+        if (pos.y < 1) { pos.y = 1; this.velocity.y = 0.2; }
+
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
+    }
+}
+
+// ============================================================
+// Ender Dragon - Final boss in Ender World
+// ============================================================
+
+function createEnderDragonMesh() {
+    const group = new THREE.Group();
+    const black = 0x111118;
+    const purple = 0x6622aa;
+    const eyeColor = 0xcc44ff;
+
+    // Head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 1.5), new THREE.MeshLambertMaterial({ color: black }));
+    head.position.set(0, 0.5, -2.5);
+    group.add(head);
+
+    // Snout
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), new THREE.MeshLambertMaterial({ color: black }));
+    snout.position.set(0, 0.3, -3.4);
+    group.add(snout);
+
+    // Eyes - purple glowing
+    const eMat = new THREE.MeshBasicMaterial({ color: eyeColor });
+    const eleft = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.2, 0.1), eMat);
+    eleft.position.set(-0.35, 0.65, -3.25);
+    group.add(eleft);
+    const eright = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.2, 0.1), eMat);
+    eright.position.set(0.35, 0.65, -3.25);
+    group.add(eright);
+
+    // Jaw
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.2, 0.7), new THREE.MeshLambertMaterial({ color: 0x1a1a25 }));
+    jaw.position.set(0, 0.0, -3.3);
+    jaw.name = 'jaw';
+    group.add(jaw);
+
+    // Horns
+    const hornMat = new THREE.MeshLambertMaterial({ color: 0x333340 });
+    const hornL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.15), hornMat);
+    hornL.position.set(-0.35, 1.0, -2.3);
+    hornL.rotation.x = -0.3;
+    group.add(hornL);
+    const hornR = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.15), hornMat);
+    hornR.position.set(0.35, 1.0, -2.3);
+    hornR.rotation.x = -0.3;
+    group.add(hornR);
+
+    // Neck
+    for (let i = 0; i < 3; i++) {
+        const neck = new THREE.Mesh(new THREE.BoxGeometry(0.7 + i * 0.1, 0.6, 0.6), new THREE.MeshLambertMaterial({ color: black }));
+        neck.position.set(0, 0.3 - i * 0.05, -1.5 + i * 0.5);
+        neck.name = `neck${i}`;
+        group.add(neck);
+    }
+
+    // Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 3), new THREE.MeshLambertMaterial({ color: black }));
+    body.position.set(0, 0, 0.5);
+    group.add(body);
+
+    // Spine ridge (purple)
+    const spineMat = new THREE.MeshLambertMaterial({ color: purple });
+    for (let i = 0; i < 6; i++) {
+        const spine = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3 + (3-Math.abs(i-2.5))*0.1, 0.3), spineMat);
+        spine.position.set(0, 0.7, -1 + i * 0.6);
+        group.add(spine);
+    }
+
+    // Wings
+    const wingMat = new THREE.MeshLambertMaterial({ color: 0x1a1a25, side: THREE.DoubleSide });
+    const wingMemb = new THREE.MeshLambertMaterial({ color: purple, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+
+    // Left wing
+    const wingLG = new THREE.Group();
+    wingLG.name = 'wingL';
+    wingLG.position.set(-1, 0.5, 0);
+    const wingLBone = new THREE.Mesh(new THREE.BoxGeometry(3, 0.12, 0.2), wingMat);
+    wingLBone.position.set(-1.5, 0, 0);
+    wingLG.add(wingLBone);
+    const wingLMem = new THREE.Mesh(new THREE.BoxGeometry(3, 0.05, 1.8), wingMemb);
+    wingLMem.position.set(-1.5, -0.05, 0.4);
+    wingLG.add(wingLMem);
+    group.add(wingLG);
+
+    // Right wing
+    const wingRG = new THREE.Group();
+    wingRG.name = 'wingR';
+    wingRG.position.set(1, 0.5, 0);
+    const wingRBone = new THREE.Mesh(new THREE.BoxGeometry(3, 0.12, 0.2), wingMat);
+    wingRBone.position.set(1.5, 0, 0);
+    wingRG.add(wingRBone);
+    const wingRMem = new THREE.Mesh(new THREE.BoxGeometry(3, 0.05, 1.8), wingMemb);
+    wingRMem.position.set(1.5, -0.05, 0.4);
+    wingRG.add(wingRMem);
+    group.add(wingRG);
+
+    // Tail
+    for (let i = 0; i < 4; i++) {
+        const ts = 0.6 - i * 0.12;
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(ts, ts * 0.6, 0.8), new THREE.MeshLambertMaterial({ color: black }));
+        tail.position.set(0, -0.1 - i * 0.1, 2.2 + i * 0.7);
+        tail.name = `tail${i}`;
+        group.add(tail);
+    }
+
+    // Legs
+    const legMat = new THREE.MeshLambertMaterial({ color: 0x1a1a25 });
+    for (const sx of [-0.6, 0.6]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), legMat);
+        leg.position.set(sx, -0.9, 0.2);
+        group.add(leg);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.5), legMat);
+        foot.position.set(sx, -1.35, 0.1);
+        group.add(foot);
+    }
+
+    return group;
+}
+
+class EnderDragon {
+    constructor(x, y, z) {
+        this.type = 'enderdragon';
+        this.mesh = createEnderDragonMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(1, 0, 0);
+        this.time = Math.random() * Math.PI * 2;
+        this.alive = true;
+        this.hp = 100;
+        this.orbitAngle = 0;
+        this.orbitRadius = 25;
+        this.orbitY = 35;
+        this.orbitCenter = new THREE.Vector3(0, 0, 0);
+    }
+
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Wing flap
+        const wingL = this.mesh.getObjectByName('wingL');
+        const wingR = this.mesh.getObjectByName('wingR');
+        if (wingL) wingL.rotation.z = Math.sin(this.time * 2.5) * 0.5;
+        if (wingR) wingR.rotation.z = -Math.sin(this.time * 2.5) * 0.5;
+
+        // Tail wave
+        for (let i = 0; i < 4; i++) {
+            const tail = this.mesh.getObjectByName(`tail${i}`);
+            if (tail) tail.position.x = Math.sin(this.time * 2 + i * 0.8) * 0.15 * (i + 1);
+        }
+
+        // Neck wave
+        for (let i = 0; i < 3; i++) {
+            const neck = this.mesh.getObjectByName(`neck${i}`);
+            if (neck) neck.position.x = Math.sin(this.time * 1.5 + i * 0.5) * 0.08;
+        }
+
+        // Jaw
+        const jaw = this.mesh.getObjectByName('jaw');
+        if (jaw) jaw.position.y = -0.05 + Math.sin(this.time * 1.2) * 0.05;
+
+        // Orbit flight pattern
+        this.orbitAngle += dt * 0.3;
+        const targetX = this.orbitCenter.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+        const targetZ = this.orbitCenter.z + Math.sin(this.orbitAngle) * this.orbitRadius;
+        const targetY = this.orbitY + Math.sin(this.time * 0.5) * 5;
+
+        const pos = this.mesh.position;
+        pos.x += (targetX - pos.x) * dt * 2;
+        pos.y += (targetY - pos.y) * dt * 2;
+        pos.z += (targetZ - pos.z) * dt * 2;
+
+        // Face flight direction
+        const yaw = this.orbitAngle + Math.PI / 2;
+        this.mesh.rotation.y = yaw;
+        this.mesh.rotation.z = Math.sin(this.orbitAngle) * 0.15;
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp <= 0) {
+            this.alive = false;
+        }
+    }
+}
+
+// ============================================================
 // Entity Manager
 // ============================================================
 
@@ -1185,6 +1602,11 @@ export class EntityManager {
         this.maxCliones = 12;
         this.maxBloops = 2;
         this.maxMeowls = 3;
+        this.maxGhasts = 2;
+        this.maxGuardians = 2;
+        this.ghastSpawnTimer = 5;
+        this.guardianSpawnTimer = 8;
+        this.dragonSpawned = false;
     }
 
     spawnClione(x, y, z) {
@@ -1206,6 +1628,27 @@ export class EntityManager {
         this.entities.push(wither);
         this.scene.add(wither.mesh);
         return wither;
+    }
+
+    spawnGhast(x, y, z) {
+        const g = new Ghast(x, y, z);
+        this.entities.push(g);
+        this.scene.add(g.mesh);
+        return g;
+    }
+
+    spawnGuardian(x, y, z) {
+        const g = new Guardian(x, y, z);
+        this.entities.push(g);
+        this.scene.add(g.mesh);
+        return g;
+    }
+
+    spawnEnderDragon(x, y, z) {
+        const d = new EnderDragon(x, y, z);
+        this.entities.push(d);
+        this.scene.add(d.mesh);
+        return d;
     }
 
     spawnBloop(x, y, z) {
@@ -1267,21 +1710,46 @@ export class EntityManager {
         this.scene.add(meowl.mesh);
     }
 
-    update(dt, playerX, playerY, playerZ) {
-        this.spawnCheckTimer -= dt;
-        if (this.spawnCheckTimer <= 0) {
-            this.tryNaturalSpawnClione(playerX, playerZ);
-            this.spawnCheckTimer = 2;
-        }
-        this.meowlSpawnTimer -= dt;
-        if (this.meowlSpawnTimer <= 0) {
-            this.tryNaturalSpawnMeowl(playerX, playerZ);
-            this.meowlSpawnTimer = 6 + Math.random() * 6;
-        }
-        this.bloopSpawnTimer -= dt;
-        if (this.bloopSpawnTimer <= 0) {
-            this.tryNaturalSpawnBloop(playerX, playerZ);
-            this.bloopSpawnTimer = 10 + Math.random() * 10;
+    update(dt, playerX, playerY, playerZ, dimension) {
+        // Dimension-specific spawning
+        if (dimension === 'overworld') {
+            this.spawnCheckTimer -= dt;
+            if (this.spawnCheckTimer <= 0) { this.tryNaturalSpawnClione(playerX, playerZ); this.spawnCheckTimer = 2; }
+            this.meowlSpawnTimer -= dt;
+            if (this.meowlSpawnTimer <= 0) { this.tryNaturalSpawnMeowl(playerX, playerZ); this.meowlSpawnTimer = 6 + Math.random() * 6; }
+            this.bloopSpawnTimer -= dt;
+            if (this.bloopSpawnTimer <= 0) { this.tryNaturalSpawnBloop(playerX, playerZ); this.bloopSpawnTimer = 10 + Math.random() * 10; }
+            // Guardian in water
+            this.guardianSpawnTimer -= dt;
+            if (this.guardianSpawnTimer <= 0) {
+                let gc = 0; for (const e of this.entities) if (e.type === 'guardian' && e.alive) gc++;
+                if (gc < this.maxGuardians) {
+                    const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 20;
+                    const sx = Math.floor(playerX + Math.cos(a) * d), sz = Math.floor(playerZ + Math.sin(a) * d);
+                    for (let y = 10; y <= 18; y++) {
+                        if (this.world.getBlock(sx, y, sz) === BlockType.WATER) { this.spawnGuardian(sx, y, sz); break; }
+                    }
+                }
+                this.guardianSpawnTimer = 12 + Math.random() * 10;
+            }
+        } else if (dimension === 'nether') {
+            // Ghast spawning in nether
+            this.ghastSpawnTimer -= dt;
+            if (this.ghastSpawnTimer <= 0) {
+                let gc = 0; for (const e of this.entities) if (e.type === 'ghast' && e.alive) gc++;
+                if (gc < this.maxGhasts) {
+                    const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 20;
+                    const sx = playerX + Math.cos(a) * d, sz = playerZ + Math.sin(a) * d;
+                    this.spawnGhast(sx, 25 + Math.random() * 15, sz);
+                }
+                this.ghastSpawnTimer = 8 + Math.random() * 8;
+            }
+        } else if (dimension === 'ender') {
+            // Ender Dragon - one per visit
+            if (!this.dragonSpawned) {
+                this.spawnEnderDragon(playerX, 35, playerZ);
+                this.dragonSpawned = true;
+            }
         }
 
         const cliones = [];
@@ -1309,12 +1777,17 @@ export class EntityManager {
             if (entity.type === 'maja') entity.update(dt, this.world, cliones);
             else if (entity.type === 'bloop') entity.update(dt, this.world, cliones, majas);
             else if (entity.type === 'wither') entity.update(dt, this.world, this.entities, playerX, playerY, playerZ);
+            else if (entity.type === 'ghast') entity.update(dt);
+            else if (entity.type === 'guardian') entity.update(dt, this.world);
+            else if (entity.type === 'enderdragon') entity.update(dt);
             else if (entity.type === 'meowl') entity.update(dt);
             else entity.update(dt, this.world);
 
             const dx = entity.mesh.position.x - playerX;
             const dz = entity.mesh.position.z - playerZ;
-            const maxD = (entity.type === 'wither') ? 120 : (entity.type === 'maja' || entity.type === 'bloop') ? 80 : (entity.type === 'meowl' ? 80 : 50);
+            if (entity.type === 'enderdragon') continue; // dragon never despawns
+            if (entity.tamed) continue; // tamed never despawn
+            const maxD = (entity.type === 'wither' || entity.type === 'ghast') ? 120 : (entity.type === 'maja' || entity.type === 'bloop' || entity.type === 'guardian') ? 80 : (entity.type === 'meowl' ? 80 : 50);
             if (dx * dx + dz * dz > maxD * maxD) {
                 this.scene.remove(entity.mesh);
                 this.entities[i] = this.entities[this.entities.length - 1];

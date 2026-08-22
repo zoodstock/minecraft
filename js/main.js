@@ -252,6 +252,7 @@ let frameCount = 0, lastFpsTime = 0;
 
 // ---- 블록 상호작용 쿨다운 ----
 let interactCooldown = 0;
+let ridingGhast = null;
 
 // ---- 포탈 / 차원 전환 ----
 let portalCooldown = 0;
@@ -306,6 +307,8 @@ function switchDimension(target) {
     player.velocity.set(0, 0, 0);
     world.update(0, 0);
     portalCooldown = 3;
+    ridingGhast = null;
+    entityManager.dragonSpawned = false;
 
     // AI 플레이어 재생성
     for (const ai of aiPlayers) ai.destroy();
@@ -353,6 +356,32 @@ function gameLoop(time) {
 
     player.update(dt, inputState);
 
+    // 가스트 라이딩: 플레이어가 가스트 위에 타고 조종
+    if (ridingGhast && ridingGhast.alive && ridingGhast.tamed) {
+        const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+        const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+        const moveDir = new THREE.Vector3(0, 0, 0);
+        if (inputState.forward) moveDir.add(forward);
+        if (inputState.backward) moveDir.sub(forward);
+        if (inputState.left) moveDir.sub(right);
+        if (inputState.right) moveDir.add(right);
+        if (inputState.joystickX || inputState.joystickY) {
+            moveDir.add(forward.clone().multiplyScalar(-inputState.joystickY));
+            moveDir.add(right.clone().multiplyScalar(inputState.joystickX));
+        }
+        if (moveDir.length() > 0) moveDir.normalize();
+        const gs = 4;
+        ridingGhast.velocity.x = moveDir.x * gs;
+        ridingGhast.velocity.z = moveDir.z * gs;
+        ridingGhast.velocity.y = inputState.jump ? 3 : (inputState.descend ? -3 : 0);
+        // 플레이어를 가스트 위에 배치
+        player.position.copy(ridingGhast.mesh.position);
+        player.position.y += 2;
+        player.velocity.set(0, 0, 0);
+    } else {
+        ridingGhast = null;
+    }
+
     world.update(player.position.x, player.position.z);
 
     // 포탈 진입 체크
@@ -380,7 +409,7 @@ function gameLoop(time) {
     }
 
     // 엔티티 업데이트
-    entityManager.update(dt, player.position.x, player.position.y, player.position.z);
+    entityManager.update(dt, player.position.x, player.position.y, player.position.z, world.dimension);
 
     // AI 플레이어 업데이트
     for (const ai of aiPlayers) {
@@ -408,59 +437,87 @@ function gameLoop(time) {
             interactCooldown = 0.25;
         }
         if (clicks.rightClick) {
-            // 생성알로 위더 길들이기: 시선 방향의 위더를 찾아서 길들임
-            if (currentItem === SPAWN_EGG_CLIONE || currentItem === SPAWN_EGG_MAJA) {
-                let tamedWither = false;
-                for (let d = 1; d <= 10; d += 1) {
-                    const checkPos = player.camera.position.clone().add(dir.clone().multiplyScalar(d));
-                    for (const e of entityManager.entities) {
-                        if (e.type !== 'wither' || !e.alive || e.tamed) continue;
-                        const dx = e.mesh.position.x - checkPos.x;
-                        const dy = e.mesh.position.y - checkPos.y;
-                        const dz = e.mesh.position.z - checkPos.z;
-                        if (dx*dx + dy*dy + dz*dz < 4) {
-                            e.tamed = true;
-                            // 초록 표시 추가
-                            const indicator = new THREE.Mesh(
-                                new THREE.BoxGeometry(0.2 * e.scale, 0.2 * e.scale, 0.2 * e.scale),
-                                new THREE.MeshBasicMaterial({ color: 0x00ff44 })
-                            );
-                            indicator.position.set(0, 0.9 * e.scale, 0);
-                            indicator.rotation.set(Math.PI/4, Math.PI/4, 0);
-                            e.mesh.add(indicator);
-                            tamedWither = true;
-                            interactCooldown = 0.5;
-                            break;
-                        }
-                    }
-                    if (tamedWither) break;
+            // 시선 방향 엔티티 찾기 (길들이기/상호작용용)
+            let nearEntity = null;
+            for (let d = 1; d <= 10; d += 1) {
+                const cp = player.camera.position.clone().add(dir.clone().multiplyScalar(d));
+                for (const e of entityManager.entities) {
+                    if (!e.alive) continue;
+                    const ex = e.mesh.position.x - cp.x, ey = e.mesh.position.y - cp.y, ez = e.mesh.position.z - cp.z;
+                    if (ex*ex + ey*ey + ez*ez < 4) { nearEntity = e; break; }
                 }
-                // 위더를 못 찾으면 일반 스폰
-                if (!tamedWither && hit && hit.placeX !== undefined) {
-                    if (currentItem === SPAWN_EGG_CLIONE) {
-                        entityManager.spawnClione(hit.placeX, hit.placeY, hit.placeZ);
-                    } else {
-                        entityManager.spawnMaja(hit.placeX, hit.placeY, hit.placeZ);
+                if (nearEntity) break;
+            }
+
+            let handled = false;
+
+            // 불로 가스트 길들이기 + 타기
+            if (currentItem === ITEM_FIRE && nearEntity && nearEntity.type === 'ghast' && !nearEntity.tamed) {
+                nearEntity.tamed = true;
+                const ind = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3), new THREE.MeshBasicMaterial({color:0x00ff44}));
+                ind.position.set(0, 1.3, 0); ind.rotation.set(Math.PI/4, Math.PI/4, 0);
+                nearEntity.mesh.add(ind);
+                interactCooldown = 0.5; handled = true;
+            }
+            // 길들인 가스트 타기 (아무 아이템으로 터치)
+            if (!handled && nearEntity && nearEntity.type === 'ghast' && nearEntity.tamed) {
+                ridingGhast = ridingGhast === nearEntity ? null : nearEntity;
+                interactCooldown = 0.5; handled = true;
+            }
+
+            // 클리오네 알로 가디언 길들이기 -> 엔드포탈 생성
+            if (!handled && currentItem === SPAWN_EGG_CLIONE && nearEntity && nearEntity.type === 'guardian' && !nearEntity.tamed) {
+                nearEntity.tamed = true;
+                const ind = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.2), new THREE.MeshBasicMaterial({color:0x00ff44}));
+                ind.position.set(0, 0.7, 0); ind.rotation.set(Math.PI/4, Math.PI/4, 0);
+                nearEntity.mesh.add(ind);
+                // 가디언 위치에 엔드포탈(네더포탈 블록 재사용) 생성
+                const gx = Math.floor(nearEntity.mesh.position.x);
+                const gy = Math.floor(nearEntity.mesh.position.y);
+                const gz = Math.floor(nearEntity.mesh.position.z);
+                for (let px = -1; px <= 1; px++) {
+                    for (let pz = -1; pz <= 1; pz++) {
+                        world.setBlock(gx + px, gy, gz + pz, BlockType.NETHER_PORTAL);
                     }
-                    interactCooldown = 0.25;
                 }
-            } else if (hit && hit.placeX !== undefined && currentItem === ITEM_BLACK_SKULL) {
-                // 검은 해골을 영혼의 흙 위에 놓으면 위더 소환
+                interactCooldown = 0.5; handled = true;
+            }
+
+            // 생성알로 위더 길들이기
+            if (!handled && (currentItem === SPAWN_EGG_CLIONE || currentItem === SPAWN_EGG_MAJA) && nearEntity && nearEntity.type === 'wither' && !nearEntity.tamed) {
+                nearEntity.tamed = true;
+                const s = nearEntity.scale;
+                const ind = new THREE.Mesh(new THREE.BoxGeometry(0.2*s,0.2*s,0.2*s), new THREE.MeshBasicMaterial({color:0x00ff44}));
+                ind.position.set(0, 0.9*s, 0); ind.rotation.set(Math.PI/4, Math.PI/4, 0);
+                nearEntity.mesh.add(ind);
+                interactCooldown = 0.5; handled = true;
+            }
+
+            // 생성알 일반 스폰
+            if (!handled && (currentItem === SPAWN_EGG_CLIONE || currentItem === SPAWN_EGG_MAJA) && hit && hit.placeX !== undefined) {
+                if (currentItem === SPAWN_EGG_CLIONE) entityManager.spawnClione(hit.placeX, hit.placeY, hit.placeZ);
+                else entityManager.spawnMaja(hit.placeX, hit.placeY, hit.placeZ);
+                interactCooldown = 0.25; handled = true;
+            }
+
+            if (!handled && hit && hit.placeX !== undefined && currentItem === ITEM_BLACK_SKULL) {
                 if (hit.block === BlockType.SOUL_DIRT) {
                     const count = countConnectedSoulDirt(hit.x, hit.y, hit.z);
                     const scale = 0.8 + count * 0.3;
-                    // 연결된 영혼의 흙 제거
                     removeConnectedSoulDirt(hit.x, hit.y, hit.z);
                     entityManager.spawnWither(hit.x, hit.y + 1, hit.z, scale);
                     interactCooldown = 0.5;
                 }
-            } else if (currentItem === ITEM_FIRE && hit) {
-                // 불을 흑요석에 대면 네더포탈 생성
+                handled = true;
+            }
+            if (!handled && currentItem === ITEM_FIRE && hit) {
                 if (hit.block === BlockType.OBSIDIAN) {
                     tryCreateNetherPortal(hit.x, hit.y, hit.z);
                     interactCooldown = 0.5;
                 }
-            } else if (hit && hit.placeX !== undefined) {
+                handled = true;
+            }
+            if (!handled && hit && hit.placeX !== undefined) {
                 world.setBlock(hit.placeX, hit.placeY, hit.placeZ, currentItem);
                 if (mp.connected) mp.sendBlockChange(hit.placeX, hit.placeY, hit.placeZ, currentItem);
                 interactCooldown = 0.25;
