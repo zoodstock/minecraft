@@ -89,8 +89,8 @@ export class World {
                     }
                 }
 
-                // 네더포탈 폐허 (매우 희귀)
-                if (height > WATER_LEVEL + 2 && Math.random() < 0.0004 &&
+                // 네더포탈 폐허
+                if (height > WATER_LEVEL + 2 && Math.random() < 0.003 &&
                     x > 3 && x < CHUNK_SIZE - 4 && z > 1 && z < CHUNK_SIZE - 2) {
                     // 흑요석 프레임 (4x5, 일부 파괴됨)
                     const by = height + 1;
@@ -118,8 +118,8 @@ export class World {
                 }
 
                 // 허공 지형 - 엔드 스톤 떠있는 섬 (희귀)
-                const voidNoise = this.noise.noise2D(wx * 0.008 + 200, wz * 0.008 + 200);
-                if (voidNoise > 0.65 && height > WATER_LEVEL + 5) {
+                const voidNoise = this.noise.noise2D(wx * 0.015 + 200, wz * 0.015 + 200);
+                if (voidNoise > 0.35 && height > WATER_LEVEL + 5) {
                     // 지면을 엔드 스톤으로 대체하고 아래를 비움
                     const islandH = height;
                     const thickness = 2 + Math.floor(Math.abs(this.noise.noise2D(wx * 0.05 + 200, wz * 0.05 + 200)) * 3);
@@ -135,7 +135,7 @@ export class World {
                         }
                     }
                     // 표면에 퍼퍼 건물 (매우 드물게)
-                    if (Math.random() < 0.008 && x > 1 && x < CHUNK_SIZE - 2 && z > 1 && z < CHUNK_SIZE - 2) {
+                    if (Math.random() < 0.03 && x > 1 && x < CHUNK_SIZE - 2 && z > 1 && z < CHUNK_SIZE - 2) {
                         for (let py = 1; py <= 4; py++) {
                             const y = islandH + py;
                             if (y < CHUNK_HEIGHT) data[x * CHUNK_HEIGHT * CHUNK_SIZE + y * CHUNK_SIZE + z] = BlockType.PURPUR;
