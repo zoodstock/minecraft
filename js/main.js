@@ -457,6 +457,13 @@ function gameLoop(time) {
                 nearEntity.makeHappy();
                 interactCooldown = 0.5; handled = true;
             }
+            // 불로 드래곤 알 부화 -> 아기 드래곤
+            if (!handled && currentItem === ITEM_FIRE && nearEntity && nearEntity.type === 'dragon_egg') {
+                const p = nearEntity.mesh.position;
+                entityManager.spawnBabyDragon(p.x, p.y + 1, p.z);
+                nearEntity.alive = false;
+                interactCooldown = 0.5; handled = true;
+            }
             // 길들인 가스트 타기 (아무 아이템으로 터치)
             if (!handled && nearEntity && nearEntity.type === 'ghast' && nearEntity.tamed) {
                 ridingGhast = ridingGhast === nearEntity ? null : nearEntity;

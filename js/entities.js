@@ -1222,6 +1222,7 @@ class Ghast {
         this.tamed = false;
         this.happy = false;
         this.rider = null;
+        this.fireballCooldown = 0;
     }
 
     makeHappy() {
@@ -1330,11 +1331,15 @@ class Ghast {
         }
 
         if (!this.happy) {
-            // Tear drip (only when sad)
             for (const n of ['tear_eyeL', 'tear_eyeR']) {
                 const t = this.mesh.getObjectByName(n);
                 if (t) t.position.y = -0.1 + Math.sin(this.time * 2.5) * 0.06;
             }
+        }
+
+        // Happy Ghast shoots fireballs at nearby Ender Dragon
+        if (this.happy && this.fireballCooldown !== undefined) {
+            this.fireballCooldown -= dt;
         }
 
         if (!this.tamed) {
@@ -1605,6 +1610,214 @@ class EnderDragon {
 }
 
 // ============================================================
+// Fireball - shot by Happy Ghast at Ender Dragon
+// ============================================================
+
+class Fireball {
+    constructor(x, y, z, target) {
+        this.type = 'fireball';
+        this.alive = true;
+        this.tamed = false;
+        this.time = 0;
+        this.mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xff6600 })
+        );
+        // Glow
+        const glow = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.3 })
+        );
+        this.mesh.add(glow);
+        this.mesh.position.set(x, y, z);
+        this.target = target;
+        this.velocity = new THREE.Vector3();
+        this.lifeTime = 5;
+    }
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+        this.lifeTime -= dt;
+        if (this.lifeTime <= 0) { this.alive = false; return; }
+        if (this.target && this.target.alive) {
+            const dir = new THREE.Vector3().subVectors(this.target.mesh.position, this.mesh.position);
+            const dist = dir.length();
+            if (dist > 1.5) {
+                dir.normalize().multiplyScalar(8);
+                this.velocity.lerp(dir, dt * 5);
+            } else {
+                this.target.takeDamage(10);
+                this.alive = false;
+                return;
+            }
+        }
+        this.mesh.position.add(this.velocity.clone().multiplyScalar(dt));
+        this.mesh.rotation.x += dt * 5;
+        this.mesh.rotation.y += dt * 3;
+    }
+}
+
+// ============================================================
+// Dragon Egg - dropped when Ender Dragon dies
+// ============================================================
+
+function createDragonEggMesh() {
+    const group = new THREE.Group();
+    // Egg shape using stacked boxes
+    const eggMat = new THREE.MeshLambertMaterial({ color: 0x1a0a2a });
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), eggMat)).position.y = 0;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.6), eggMat)).position.y = 0.3;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), eggMat)).position.y = 0.6;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.3), eggMat)).position.y = 0.85;
+    // Purple speckles
+    const specMat = new THREE.MeshBasicMaterial({ color: 0x8844cc });
+    for (let i = 0; i < 5; i++) {
+        const spec = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), specMat);
+        spec.position.set((Math.random()-0.5)*0.4, Math.random()*0.7+0.1, (Math.random()-0.5)*0.4);
+        group.add(spec);
+    }
+    return group;
+}
+
+class DragonEgg {
+    constructor(x, y, z) {
+        this.type = 'dragon_egg';
+        this.mesh = createDragonEggMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = false;
+        this.time = 0;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+    }
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+        this.mesh.rotation.y += dt * 0.5;
+        // Float in place with gentle bob
+        this.mesh.position.y += Math.sin(this.time * 2) * 0.005;
+    }
+}
+
+// ============================================================
+// Baby Dragon - hatched from Dragon Egg with Fire
+// ============================================================
+
+function createBabyDragonMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const bk = 0x1a1a25, pu = 0x7733bb, ey = 0xcc55ff;
+
+    // Head - big cute head
+    group.add(bm(0.6, 0.5, 0.6, bk)).position.set(0, 0.5, -0.5);
+    // Big cute eyes
+    for (const sx of [-0.15, 0.15]) {
+        group.add(bm(0.18, 0.18, 0.05, 0x220044)).position.set(sx, 0.6, -0.82);
+        group.add(gm(0.12, 0.14, 0.06, ey)).position.set(sx, 0.6, -0.84);
+    }
+    // Small horns
+    for (const sx of [-0.18, 0.18]) {
+        const h = bm(0.06, 0.2, 0.06, 0x333340);
+        h.position.set(sx, 0.82, -0.45); h.rotation.x = -0.3; group.add(h);
+    }
+    // Snout
+    group.add(bm(0.3, 0.2, 0.2, bk)).position.set(0, 0.4, -0.75);
+    // Nostrils - tiny purple dots
+    for (const sx of [-0.06, 0.06]) group.add(gm(0.04, 0.03, 0.03, pu)).position.set(sx, 0.42, -0.86);
+
+    // Body - small and round
+    group.add(bm(0.5, 0.4, 0.7, bk)).position.set(0, 0.15, 0);
+    // Belly
+    group.add(bm(0.35, 0.08, 0.5, 0x2a2a35)).position.set(0, -0.05, 0);
+    // Spine
+    for (let i = 0; i < 4; i++) {
+        group.add(bm(0.06, 0.1, 0.08, pu)).position.set(0, 0.4, -0.3 + i * 0.25);
+    }
+
+    // Wings - small stubby
+    const wm = new THREE.MeshLambertMaterial({color: pu, transparent: true, opacity: 0.5, side: THREE.DoubleSide});
+    for (const [sx, name] of [[-0.25, 'wingL'], [0.25, 'wingR']]) {
+        const wg = new THREE.Group(); wg.name = name;
+        wg.position.set(sx, 0.3, 0);
+        const dir = sx < 0 ? -1 : 1;
+        wg.add(bm(0.5, 0.06, 0.08, 0x1a1a25)).position.set(dir * 0.25, 0, 0);
+        const mem = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.4), wm);
+        mem.position.set(dir * 0.25, -0.03, 0.1); wg.add(mem);
+        group.add(wg);
+    }
+
+    // Tail
+    for (let i = 0; i < 3; i++) {
+        const s = 0.2 - i * 0.05;
+        const t = bm(s, s * 0.6, 0.25, bk);
+        t.position.set(0, 0.1 - i * 0.03, 0.45 + i * 0.22);
+        t.name = `tail${i}`; group.add(t);
+    }
+    // Tail tip purple
+    group.add(bm(0.06, 0.06, 0.12, pu)).position.set(0, 0.02, 1.1);
+
+    // Legs - tiny
+    for (const [lx, lz] of [[-0.15, -0.1], [0.15, -0.1], [-0.12, 0.2], [0.12, 0.2]]) {
+        group.add(bm(0.1, 0.2, 0.1, 0x1a1a25)).position.set(lx, -0.1, lz);
+    }
+
+    return group;
+}
+
+class BabyDragon {
+    constructor(x, y, z) {
+        this.type = 'babydragon';
+        this.mesh = createBabyDragonMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = true;
+        this.time = Math.random() * Math.PI * 2;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.dirChangeTimer = 2;
+    }
+    update(dt, playerX, playerY, playerZ) {
+        if (!this.alive) return;
+        this.time += dt;
+        // Wing flap
+        const wL = this.mesh.getObjectByName('wingL'), wR = this.mesh.getObjectByName('wingR');
+        if (wL) wL.rotation.z = Math.sin(this.time * 4) * 0.4;
+        if (wR) wR.rotation.z = -Math.sin(this.time * 4) * 0.4;
+        // Tail wag
+        for (let i = 0; i < 3; i++) {
+            const t = this.mesh.getObjectByName(`tail${i}`);
+            if (t) t.position.x = Math.sin(this.time * 3 + i * 0.5) * 0.04 * (i + 1);
+        }
+        // Follow player
+        if (playerX !== undefined) {
+            const dx = playerX - this.mesh.position.x;
+            const dy = playerY + 1 - this.mesh.position.y;
+            const dz = playerZ - this.mesh.position.z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (dist > 3) {
+                const s = 3 / dist;
+                this.velocity.set(dx * s, dy * s, dz * s);
+            } else {
+                this.dirChangeTimer -= dt;
+                if (this.dirChangeTimer <= 0) {
+                    this.velocity.set((Math.random()-0.5)*0.5, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.5);
+                    this.dirChangeTimer = 2 + Math.random() * 2;
+                }
+            }
+        }
+        this.mesh.position.add(this.velocity.clone().multiplyScalar(dt));
+        this.mesh.position.y += Math.sin(this.time * 2) * 0.005;
+        // Face direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 4;
+        }
+    }
+}
+
+// ============================================================
 // Entity Manager
 // ============================================================
 
@@ -1663,6 +1876,27 @@ export class EntityManager {
 
     spawnEnderDragon(x, y, z) {
         const d = new EnderDragon(x, y, z);
+        this.entities.push(d);
+        this.scene.add(d.mesh);
+        return d;
+    }
+
+    spawnFireball(x, y, z, target) {
+        const f = new Fireball(x, y, z, target);
+        this.entities.push(f);
+        this.scene.add(f.mesh);
+        return f;
+    }
+
+    spawnDragonEgg(x, y, z) {
+        const e = new DragonEgg(x, y, z);
+        this.entities.push(e);
+        this.scene.add(e.mesh);
+        return e;
+    }
+
+    spawnBabyDragon(x, y, z) {
+        const d = new BabyDragon(x, y, z);
         this.entities.push(d);
         this.scene.add(d.mesh);
         return d;
@@ -1794,16 +2028,41 @@ export class EntityManager {
             if (entity.type === 'maja') entity.update(dt, this.world, cliones);
             else if (entity.type === 'bloop') entity.update(dt, this.world, cliones, majas);
             else if (entity.type === 'wither') entity.update(dt, this.world, this.entities, playerX, playerY, playerZ);
-            else if (entity.type === 'ghast') entity.update(dt);
+            else if (entity.type === 'ghast') {
+                entity.update(dt);
+                // Happy Ghast shoots fireballs at Ender Dragon
+                if (entity.happy && entity.fireballCooldown <= 0) {
+                    for (const t of this.entities) {
+                        if (t.type !== 'enderdragon' || !t.alive) continue;
+                        const d = new THREE.Vector3().subVectors(t.mesh.position, entity.mesh.position);
+                        if (d.length() < 30) {
+                            const p = entity.mesh.position;
+                            this.spawnFireball(p.x, p.y, p.z, t);
+                            entity.fireballCooldown = 2;
+                            break;
+                        }
+                    }
+                }
+            }
             else if (entity.type === 'guardian') entity.update(dt, this.world);
-            else if (entity.type === 'enderdragon') entity.update(dt);
+            else if (entity.type === 'enderdragon') {
+                entity.update(dt);
+                // Drop egg on death
+                if (!entity.alive && !entity._eggDropped) {
+                    entity._eggDropped = true;
+                    this.spawnDragonEgg(entity.mesh.position.x, entity.mesh.position.y, entity.mesh.position.z);
+                }
+            }
+            else if (entity.type === 'fireball') entity.update(dt);
+            else if (entity.type === 'dragon_egg') entity.update(dt);
+            else if (entity.type === 'babydragon') entity.update(dt, playerX, playerY, playerZ);
             else if (entity.type === 'meowl') entity.update(dt);
             else entity.update(dt, this.world);
 
             const dx = entity.mesh.position.x - playerX;
             const dz = entity.mesh.position.z - playerZ;
-            if (entity.type === 'enderdragon') continue; // dragon never despawns
-            if (entity.tamed) continue; // tamed never despawn
+            if (entity.type === 'enderdragon' || entity.type === 'dragon_egg' || entity.type === 'babydragon') continue;
+            if (entity.tamed) continue;
             const maxD = (entity.type === 'wither' || entity.type === 'ghast') ? 120 : (entity.type === 'maja' || entity.type === 'bloop' || entity.type === 'guardian') ? 80 : (entity.type === 'meowl' ? 80 : 50);
             if (dx * dx + dz * dz > maxD * maxD) {
                 this.scene.remove(entity.mesh);
