@@ -1909,6 +1909,13 @@ export class EntityManager {
         return bloop;
     }
 
+    spawnMeowl(x, y, z) {
+        const m = new Meowl(x, y, z);
+        this.entities.push(m);
+        this.scene.add(m.mesh);
+        return m;
+    }
+
     tryNaturalSpawnClione(playerX, playerZ) {
         let count = 0;
         for (const e of this.entities) if (e.type === 'clione' && e.alive) count++;

@@ -615,6 +615,107 @@ document.getElementById('join-btn').addEventListener('click', async () => {
     }
 });
 
+// ---- 명령어 시스템 ----
+const chatInput = document.getElementById('chat-input');
+const chatMsg = document.getElementById('chat-msg');
+let chatOpen = false;
+
+const MOB_LIST = {
+    'clione': '클리오네', 'maja': '엘 그란 마하', 'bloop': '블룹',
+    'meowl': '미아울', 'wither': '위더', 'ghast': '가스트',
+    'guardian': '가디언', 'enderdragon': '엔더드래곤',
+    'dragon_egg': '드래곤 알', 'babydragon': '아기 드래곤',
+};
+
+document.addEventListener('keydown', (e) => {
+    if (!started) return;
+    if (!chatOpen && (e.key === 't' || e.key === 'T' || e.key === '/')) {
+        e.preventDefault();
+        chatOpen = true;
+        chatInput.style.display = 'block';
+        chatInput.value = e.key === '/' ? '/' : '';
+        chatInput.focus();
+        if (document.pointerLockElement) document.exitPointerLock();
+        return;
+    }
+    if (chatOpen && e.key === 'Escape') {
+        chatOpen = false;
+        chatInput.style.display = 'none';
+        chatInput.value = '';
+    }
+});
+
+chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const cmd = chatInput.value.trim();
+        chatOpen = false;
+        chatInput.style.display = 'none';
+        chatInput.value = '';
+        if (cmd) executeCommand(cmd);
+    }
+    e.stopPropagation();
+});
+
+function showChatMsg(text, color = '#fff') {
+    chatMsg.textContent = text;
+    chatMsg.style.color = color;
+    chatMsg.style.display = 'block';
+    setTimeout(() => chatMsg.style.display = 'none', 3000);
+}
+
+function executeCommand(cmd) {
+    const parts = cmd.replace(/^\//, '').split(/\s+/);
+    const name = parts[0]?.toLowerCase();
+
+    if (name === 'summon') {
+        const mobName = parts[1]?.toLowerCase();
+        if (!mobName) {
+            showChatMsg('사용법: /summon <몹이름>  |  목록: ' + Object.keys(MOB_LIST).join(', '), '#ffaa00');
+            return;
+        }
+        const p = player.position;
+        const dir = player.getDirection();
+        const sx = p.x + dir.x * 3, sy = p.y, sz = p.z + dir.z * 3;
+
+        const spawners = {
+            clione: () => entityManager.spawnClione(sx, sy, sz),
+            maja: () => entityManager.spawnMaja(sx, sy, sz),
+            bloop: () => entityManager.spawnBloop(sx, sy, sz),
+            meowl: () => entityManager.spawnMeowl(sx, sy + 5, sz),
+            wither: () => entityManager.spawnWither(sx, sy + 2, sz, 1.5),
+            ghast: () => entityManager.spawnGhast(sx, sy + 3, sz),
+            guardian: () => entityManager.spawnGuardian(sx, sy, sz),
+            enderdragon: () => entityManager.spawnEnderDragon(sx, sy + 10, sz),
+            dragon_egg: () => entityManager.spawnDragonEgg(sx, sy + 1, sz),
+            babydragon: () => entityManager.spawnBabyDragon(sx, sy + 1, sz),
+        };
+        if (!spawners[mobName]) {
+            showChatMsg(`알 수 없는 몹: ${mobName}  |  목록: ${Object.keys(MOB_LIST).join(', ')}`, '#ff4444');
+            return;
+        }
+        spawners[mobName]();
+        showChatMsg(`${MOB_LIST[mobName] || mobName} 소환됨!`, '#44ff44');
+    } else if (name === 'help') {
+        showChatMsg('명령어: /summon <몹이름> | /kill | /tp <x> <y> <z> | /help', '#aaaaff');
+    } else if (name === 'kill') {
+        let count = 0;
+        for (const e of entityManager.entities) { if (e.alive && e.type !== 'babydragon') { e.alive = false; count++; } }
+        showChatMsg(`${count}마리 처치됨`, '#ff4444');
+    } else if (name === 'tp') {
+        const tx = parseFloat(parts[1]), ty = parseFloat(parts[2]), tz = parseFloat(parts[3]);
+        if (!isNaN(tx) && !isNaN(ty) && !isNaN(tz)) {
+            player.position.set(tx, ty, tz);
+            player.velocity.set(0, 0, 0);
+            showChatMsg(`텔레포트: ${tx}, ${ty}, ${tz}`, '#44ff44');
+        } else {
+            showChatMsg('사용법: /tp <x> <y> <z>', '#ffaa00');
+        }
+    } else {
+        showChatMsg(`알 수 없는 명령어: /${name}  |  /help 로 확인`, '#ff4444');
+    }
+}
+
 // ---- 리사이즈 ----
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;

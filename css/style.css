@@ -49,6 +49,38 @@ body {
     transform: translate(-50%, -50%);
 }
 
+/* Chat / Command input */
+#chat-input {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 350px;
+    max-width: 90vw;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px;
+    z-index: 50;
+    outline: none;
+}
+#chat-msg {
+    position: fixed;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 14px;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    z-index: 50;
+    white-space: nowrap;
+}
+
 /* HUD */
 #hud {
     position: fixed;
