@@ -1818,6 +1818,249 @@ class BabyDragon {
 }
 
 // ============================================================
+// Leviathan Egg - place water on it to hatch Gargantuan Leviathan
+// ============================================================
+
+function createLeviathanEggMesh() {
+    const group = new THREE.Group();
+    const eggMat = new THREE.MeshLambertMaterial({ color: 0x1a3a4a });
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), eggMat)).position.y = 0;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 1.0), eggMat)).position.y = 0.4;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), eggMat)).position.y = 0.8;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), eggMat)).position.y = 1.1;
+    // Aqua glow speckles
+    const specMat = new THREE.MeshBasicMaterial({ color: 0x33ddcc });
+    for (let i = 0; i < 8; i++) {
+        const spec = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), specMat);
+        spec.position.set((Math.random()-0.5)*0.7, Math.random()*0.9+0.1, (Math.random()-0.5)*0.7);
+        spec.name = `spec${i}`;
+        group.add(spec);
+    }
+    return group;
+}
+
+class LeviathanEgg {
+    constructor(x, y, z) {
+        this.type = 'leviathan_egg';
+        this.mesh = createLeviathanEggMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = false;
+        this.time = 0;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+    }
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+        this.mesh.rotation.y += dt * 0.3;
+        this.mesh.position.y += Math.sin(this.time * 1.5) * 0.003;
+        // Speckle pulse
+        for (let i = 0; i < 8; i++) {
+            const s = this.mesh.getObjectByName(`spec${i}`);
+            if (s) s.material.opacity = 0.5 + Math.sin(this.time * 3 + i) * 0.5;
+        }
+    }
+}
+
+// ============================================================
+// Gargantuan Leviathan - colossal sea monster
+// ============================================================
+
+function createLeviathanMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const sm = (r,c) => new THREE.Mesh(new THREE.SphereGeometry(r,8,6), new THREE.MeshLambertMaterial({color:c}));
+
+    const dark = 0x152535, mid = 0x1e3545, light = 0x254555, belly = 0x3a6070, eye = 0x33ffcc;
+
+    // HEAD - massive angular jaw
+    const head = sm(2, dark); head.scale.set(1.5, 0.8, 1.3); head.position.set(0, 0.3, -3); group.add(head);
+    // Armored plates on head
+    group.add(bm(2.5, 0.3, 1.5, mid)).position.set(0, 0.8, -2.5);
+    group.add(bm(2.0, 0.2, 1.0, mid)).position.set(0, 1.0, -2.0);
+    // Brow ridge
+    group.add(bm(3.0, 0.25, 0.5, dark)).position.set(0, 0.7, -3.5);
+
+    // Eyes - 4 glowing teal eyes (2 per side)
+    for (const [sx, sy] of [[-0.9,0.6],[-0.7,0.9],[0.9,0.6],[0.7,0.9]]) {
+        group.add(bm(0.25, 0.2, 0.1, 0x112222)).position.set(sx, sy, -3.8);
+        const e = gm(0.18, 0.15, 0.12, eye);
+        e.position.set(sx, sy, -3.85); e.name = `eye_${sx}_${sy}`; group.add(e);
+    }
+
+    // MOUTH - enormous
+    const upperJaw = bm(2.8, 0.4, 1.5, dark); upperJaw.position.set(0, -0.1, -3.8); group.add(upperJaw);
+    // Lower jaw
+    const ljG = new THREE.Group(); ljG.name = 'lowerJaw'; ljG.position.set(0, -0.6, -3.2);
+    ljG.add(bm(2.5, 0.35, 1.4, mid));
+    // Teeth - massive
+    const toothMat = new THREE.MeshLambertMaterial({color: 0xddddc8});
+    for (let i = -6; i <= 6; i++) {
+        const h = 0.3 + Math.random() * 0.2;
+        const t = new THREE.Mesh(new THREE.ConeGeometry(0.08, h, 4), toothMat);
+        t.position.set(i * 0.18, 0.2 + h/2, -0.5); ljG.add(t);
+    }
+    group.add(ljG);
+    // Upper teeth
+    for (let i = -7; i <= 7; i++) {
+        const h = 0.35 + Math.random() * 0.25;
+        const t = new THREE.Mesh(new THREE.ConeGeometry(0.09, h, 4), toothMat);
+        t.position.set(i * 0.17, -0.15 - h/2, -4.3); t.rotation.x = Math.PI; group.add(t);
+    }
+    // Mouth interior
+    group.add(bm(2.2, 0.6, 1.0, 0x1a0808)).position.set(0, -0.3, -3.3);
+
+    // BODY - massive segmented
+    for (let i = 0; i < 10; i++) {
+        const t = i / 10;
+        const w = 2.5 * (1 - t * 0.5);
+        const h = 1.5 * (1 - t * 0.4);
+        const seg = bm(w, h, 1.0, i % 2 === 0 ? dark : mid);
+        seg.position.set(0, -0.05 * i, i * 0.9);
+        seg.name = `seg${i}`;
+        group.add(seg);
+        // Armored ridge on top
+        if (i < 8) {
+            group.add(bm(0.3, 0.2 + (4-Math.abs(i-4))*0.05, 0.15, light)).position.set(0, h/2 + 0.1 - 0.05*i, i*0.9);
+        }
+    }
+    // Belly lighter
+    for (let i = 0; i < 6; i++) {
+        const bw = 1.2 * (1 - i * 0.1);
+        group.add(bm(bw, 0.1, 0.8, belly)).position.set(0, -0.8 - i*0.03, i*0.9);
+    }
+
+    // FINS - large side fins
+    for (const [sx, name] of [[-1.3,'finL'],[1.3,'finR']]) {
+        const dir = sx < 0 ? -1 : 1;
+        const fg = new THREE.Group(); fg.name = name;
+        fg.position.set(sx, -0.2, -1);
+        fg.add(bm(1.5, 0.1, 1.0, mid)).position.set(dir*0.75, 0, 0);
+        fg.add(bm(0.8, 0.06, 0.6, dark)).position.set(dir*1.3, -0.05, 0.1);
+        group.add(fg);
+    }
+    // Dorsal fin
+    group.add(bm(0.15, 0.8, 1.2, dark)).position.set(0, 1.0, 1);
+
+    // TAIL - long tapered with fin
+    for (let i = 0; i < 5; i++) {
+        const s = 1.0 - i * 0.18;
+        const t = bm(s, s*0.5, 0.8, dark);
+        t.position.set(0, -0.1 - i*0.1, 9 + i*0.75);
+        t.name = `tail${i}`;
+        group.add(t);
+    }
+    // Tail flukes
+    const flukeG = new THREE.Group(); flukeG.name = 'fluke';
+    flukeG.position.set(0, -0.5, 12.8);
+    flukeG.add(bm(2.0, 0.08, 0.6, mid));
+    flukeG.add(bm(1.2, 0.06, 0.4, dark)).position.set(-0.8, 0, 0.15);
+    flukeG.add(bm(1.2, 0.06, 0.4, dark)).position.set(0.8, 0, 0.15);
+    group.add(flukeG);
+
+    // Bioluminescent spots
+    const bioMat = new THREE.MeshBasicMaterial({ color: 0x33ddcc, transparent: true, opacity: 0.6 });
+    for (let i = 0; i < 12; i++) {
+        const spot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), bioMat.clone());
+        spot.position.set((Math.random()-0.5)*2, (Math.random()-0.5)*0.8, i*0.9 - 1);
+        spot.name = `bio${i}`;
+        group.add(spot);
+    }
+
+    return group;
+}
+
+class GargantuanLeviathan {
+    constructor(x, y, z) {
+        this.type = 'leviathan';
+        this.mesh = createLeviathanMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = true; // born tamed (from egg)
+        this.time = Math.random() * Math.PI * 2;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.dirTimer = 3;
+        this.jawOpen = 0;
+    }
+
+    update(dt, playerX, playerY, playerZ) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Body wave
+        for (let i = 0; i < 10; i++) {
+            const seg = this.mesh.getObjectByName(`seg${i}`);
+            if (seg) seg.position.x = Math.sin(this.time * 1.2 + i * 0.5) * 0.08 * i;
+        }
+        // Tail wave
+        for (let i = 0; i < 5; i++) {
+            const t = this.mesh.getObjectByName(`tail${i}`);
+            if (t) t.position.x = Math.sin(this.time * 1.5 + i * 0.7) * 0.15 * (i + 1);
+        }
+        const fluke = this.mesh.getObjectByName('fluke');
+        if (fluke) fluke.rotation.y = Math.sin(this.time * 1.5 + 4) * 0.4;
+        // Fin undulation
+        const finL = this.mesh.getObjectByName('finL');
+        const finR = this.mesh.getObjectByName('finR');
+        if (finL) finL.rotation.z = Math.sin(this.time * 1.2) * 0.15;
+        if (finR) finR.rotation.z = -Math.sin(this.time * 1.2) * 0.15;
+        // Jaw
+        const lj = this.mesh.getObjectByName('lowerJaw');
+        if (lj) {
+            this.jawOpen = Math.max(0, Math.sin(this.time * 0.6) * 0.2);
+            lj.position.y = -0.6 - this.jawOpen;
+        }
+        // Bioluminescent pulse
+        for (let i = 0; i < 12; i++) {
+            const b = this.mesh.getObjectByName(`bio${i}`);
+            if (b) b.material.opacity = 0.3 + Math.sin(this.time * 2 + i * 0.8) * 0.3;
+        }
+        // Eye glow pulse
+        this.mesh.children.forEach(c => {
+            if (c.name && c.name.startsWith('eye_')) {
+                c.material.opacity = 0.7 + Math.sin(this.time * 2.5) * 0.3;
+            }
+        });
+
+        // Follow player loosely
+        if (playerX !== undefined) {
+            const dx = playerX - this.mesh.position.x;
+            const dy = playerY - 3 - this.mesh.position.y;
+            const dz = playerZ - this.mesh.position.z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (dist > 20) {
+                const s = 2.5 / dist;
+                this.velocity.set(dx*s, dy*s, dz*s);
+            } else {
+                this.dirTimer -= dt;
+                if (this.dirTimer <= 0) {
+                    this.velocity.set((Math.random()-0.5)*1, (Math.random()-0.5)*0.3, (Math.random()-0.5)*1);
+                    this.dirTimer = 3 + Math.random() * 4;
+                }
+            }
+        }
+
+        const p = this.mesh.position;
+        p.x += this.velocity.x * dt;
+        p.y += this.velocity.y * dt;
+        p.z += this.velocity.z * dt;
+        p.y += Math.sin(this.time * 0.6) * 0.01;
+        if (p.y < 5) this.velocity.y = Math.abs(this.velocity.y) + 0.2;
+        if (p.y > 25) this.velocity.y = -Math.abs(this.velocity.y) - 0.2;
+
+        // Face direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 1.5;
+        }
+    }
+}
+
+// ============================================================
 // Entity Manager
 // ============================================================
 
@@ -1900,6 +2143,20 @@ export class EntityManager {
         this.entities.push(d);
         this.scene.add(d.mesh);
         return d;
+    }
+
+    spawnLeviathanEgg(x, y, z) {
+        const e = new LeviathanEgg(x, y, z);
+        this.entities.push(e);
+        this.scene.add(e.mesh);
+        return e;
+    }
+
+    spawnLeviathan(x, y, z) {
+        const l = new GargantuanLeviathan(x, y, z);
+        this.entities.push(l);
+        this.scene.add(l.mesh);
+        return l;
     }
 
     spawnBloop(x, y, z) {
@@ -2062,13 +2319,15 @@ export class EntityManager {
             }
             else if (entity.type === 'fireball') entity.update(dt);
             else if (entity.type === 'dragon_egg') entity.update(dt);
+            else if (entity.type === 'leviathan_egg') entity.update(dt);
             else if (entity.type === 'babydragon') entity.update(dt, playerX, playerY, playerZ);
+            else if (entity.type === 'leviathan') entity.update(dt, playerX, playerY, playerZ);
             else if (entity.type === 'meowl') entity.update(dt);
             else entity.update(dt, this.world);
 
             const dx = entity.mesh.position.x - playerX;
             const dz = entity.mesh.position.z - playerZ;
-            if (entity.type === 'enderdragon' || entity.type === 'dragon_egg' || entity.type === 'babydragon') continue;
+            if (entity.type === 'enderdragon' || entity.type === 'dragon_egg' || entity.type === 'babydragon' || entity.type === 'leviathan_egg' || entity.type === 'leviathan') continue;
             if (entity.tamed) continue;
             const maxD = (entity.type === 'wither' || entity.type === 'ghast') ? 120 : (entity.type === 'maja' || entity.type === 'bloop' || entity.type === 'guardian') ? 80 : (entity.type === 'meowl' ? 80 : 50);
             if (dx * dx + dz * dz > maxD * maxD) {

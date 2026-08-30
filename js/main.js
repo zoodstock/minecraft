@@ -60,6 +60,7 @@ const SPAWN_EGG_CLIONE = 'spawn_clione';
 const SPAWN_EGG_MAJA = 'spawn_maja';
 const ITEM_BLACK_SKULL = 'black_skull';
 const ITEM_FIRE = 'fire';
+const ITEM_LEVIATHAN_EGG = 'leviathan_egg';
 
 const HOTBAR_ITEMS = [
     ...PLACEABLE_BLOCKS,
@@ -67,6 +68,7 @@ const HOTBAR_ITEMS = [
     SPAWN_EGG_CLIONE,
     SPAWN_EGG_MAJA,
     ITEM_BLACK_SKULL,
+    ITEM_LEVIATHAN_EGG,
 ];
 
 const ITEM_NAMES_KO = {
@@ -83,6 +85,7 @@ const ITEM_NAMES_KO = {
     [SPAWN_EGG_CLIONE]: '클리오네 생성알',
     [SPAWN_EGG_MAJA]: '엘 그란 마하 생성알',
     [ITEM_BLACK_SKULL]: '검은 해골',
+    [ITEM_LEVIATHAN_EGG]: '래비아탄 알',
 };
 
 const ITEM_COLORS = {
@@ -99,6 +102,7 @@ const ITEM_COLORS = {
     [SPAWN_EGG_CLIONE]: null,
     [SPAWN_EGG_MAJA]: null,
     [ITEM_BLACK_SKULL]: null,
+    [ITEM_LEVIATHAN_EGG]: null,
 };
 
 // ---- 핫바 UI ----
@@ -129,6 +133,9 @@ function buildHotbar() {
         } else if (item === ITEM_BLACK_SKULL) {
             preview.style.background = 'radial-gradient(circle at 50% 40%, #333 0%, #111 60%, #000 100%)';
             preview.style.borderRadius = '30% 30% 40% 40%';
+        } else if (item === ITEM_LEVIATHAN_EGG) {
+            preview.style.background = 'radial-gradient(ellipse at 40% 40%, #254555 0%, #1a3a4a 50%, #33ddcc 100%)';
+            preview.style.borderRadius = '40% 40% 50% 50%';
         } else {
             preview.style.background = ITEM_COLORS[item] || '#888';
         }
@@ -464,6 +471,18 @@ function gameLoop(time) {
                 nearEntity.alive = false;
                 interactCooldown = 0.5; handled = true;
             }
+            // 래비아탄 알 설치
+            if (!handled && currentItem === ITEM_LEVIATHAN_EGG && hit && hit.placeX !== undefined) {
+                entityManager.spawnLeviathanEgg(hit.placeX, hit.placeY, hit.placeZ);
+                interactCooldown = 0.5; handled = true;
+            }
+            // 물로 래비아탄 알 부화 -> 가르강튀안 래비아탄
+            if (!handled && currentItem === BlockType.WATER && nearEntity && nearEntity.type === 'leviathan_egg') {
+                const p = nearEntity.mesh.position;
+                entityManager.spawnLeviathan(p.x, p.y, p.z);
+                nearEntity.alive = false;
+                interactCooldown = 0.5; handled = true;
+            }
             // 길들인 가스트 타기 (아무 아이템으로 터치)
             if (!handled && nearEntity && nearEntity.type === 'ghast' && nearEntity.tamed) {
                 ridingGhast = ridingGhast === nearEntity ? null : nearEntity;
@@ -626,6 +645,7 @@ const MOB_LIST = {
     'meowl': '미아울', 'wither': '위더', 'ghast': '가스트',
     'guardian': '가디언', 'enderdragon': '엔더드래곤',
     'dragon_egg': '드래곤 알', 'babydragon': '아기 드래곤',
+    'leviathan_egg': '래비아탄 알', 'leviathan': '가르강튀안 래비아탄',
 };
 
 document.addEventListener('keydown', (e) => {
@@ -702,6 +722,8 @@ function executeCommand(cmd) {
             enderdragon: () => entityManager.spawnEnderDragon(sx, sy + 10, sz),
             dragon_egg: () => entityManager.spawnDragonEgg(sx, sy + 1, sz),
             babydragon: () => entityManager.spawnBabyDragon(sx, sy + 1, sz),
+            leviathan_egg: () => entityManager.spawnLeviathanEgg(sx, sy + 1, sz),
+            leviathan: () => entityManager.spawnLeviathan(sx, sy, sz),
         };
         if (!spawners[mobName]) {
             showChatMsg(`알 수 없는 몹: ${mobName}  |  목록: ${Object.keys(MOB_LIST).join(', ')}`, '#ff4444');
