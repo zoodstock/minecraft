@@ -471,17 +471,14 @@ function gameLoop(time) {
                 nearEntity.alive = false;
                 interactCooldown = 0.5; handled = true;
             }
-            // 래비아탄 알 설치
-            if (!handled && currentItem === ITEM_LEVIATHAN_EGG && hit && hit.placeX !== undefined) {
-                entityManager.spawnLeviathanEgg(hit.placeX, hit.placeY, hit.placeZ);
-                interactCooldown = 0.5; handled = true;
-            }
             // 물로 래비아탄 알 부화 -> 가르강튀안 래비아탄
-            if (!handled && currentItem === BlockType.WATER && nearEntity && nearEntity.type === 'leviathan_egg') {
-                const p = nearEntity.mesh.position;
-                entityManager.spawnLeviathan(p.x, p.y, p.z);
-                nearEntity.alive = false;
-                interactCooldown = 0.5; handled = true;
+            if (!handled && nearEntity && nearEntity.type === 'leviathan_egg') {
+                if (currentItem === BlockType.WATER) {
+                    const p = nearEntity.mesh.position;
+                    entityManager.spawnLeviathan(p.x, p.y, p.z);
+                    nearEntity.alive = false;
+                    interactCooldown = 0.5; handled = true;
+                }
             }
             // 길들인 가스트 타기 (아무 아이템으로 터치)
             if (!handled && nearEntity && nearEntity.type === 'ghast' && nearEntity.tamed) {
@@ -540,6 +537,11 @@ function gameLoop(time) {
                     interactCooldown = 0.5;
                 }
                 handled = true;
+            }
+            // 래비아탄 알 설치
+            if (!handled && currentItem === ITEM_LEVIATHAN_EGG && hit && hit.placeX !== undefined) {
+                entityManager.spawnLeviathanEgg(hit.placeX, hit.placeY, hit.placeZ);
+                interactCooldown = 0.5; handled = true;
             }
             if (!handled && hit && hit.placeX !== undefined) {
                 world.setBlock(hit.placeX, hit.placeY, hit.placeZ, currentItem);
