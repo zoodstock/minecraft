@@ -564,6 +564,7 @@ function startGame() {
     document.getElementById('info').style.display = 'block';
     document.getElementById('selected-block').style.display = 'block';
     hudEl.style.display = 'flex';
+    document.getElementById('cmd-bar').style.display = 'flex';
     if (!input.isMobile) {
         canvas.requestPointerLock();
     }
@@ -663,6 +664,18 @@ function showChatMsg(text, color = '#fff') {
     chatMsg.style.display = 'block';
     setTimeout(() => chatMsg.style.display = 'none', 3000);
 }
+
+// 명령어 버튼 클릭
+document.querySelectorAll('.cmd-btn').forEach(btn => {
+    const handler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const cmd = btn.dataset.cmd;
+        if (cmd && started) executeCommand(cmd);
+    };
+    btn.addEventListener('click', handler);
+    btn.addEventListener('touchstart', handler, { passive: false });
+});
 
 function executeCommand(cmd) {
     const parts = cmd.replace(/^\//, '').split(/\s+/);
