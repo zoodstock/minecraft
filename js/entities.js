@@ -1,0 +1,2453 @@
+import * as THREE from 'three';
+import { BlockType } from './blocks.js';
+
+// ============================================================
+// Clione (Sea Angel) - translucent rectangular body with orange accents
+// Spawns naturally in water, floats around peacefully
+// ============================================================
+
+const SWIM_SPEED = 0.4;
+const WING_FLAP_SPEED = 6;
+const BOB_SPEED = 2;
+
+function createClioneMesh() {
+    const group = new THREE.Group();
+
+    const bodyGeo = new THREE.BoxGeometry(0.2, 0.4, 0.15);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0xe8d8d0, transparent: true, opacity: 0.55 });
+    group.add(new THREE.Mesh(bodyGeo, bodyMat));
+
+    const organGeo = new THREE.BoxGeometry(0.08, 0.12, 0.06);
+    const organMat = new THREE.MeshLambertMaterial({ color: 0xff6030, transparent: true, opacity: 0.8 });
+    const organ = new THREE.Mesh(organGeo, organMat);
+    organ.position.set(0, 0.02, 0);
+    group.add(organ);
+
+    const headGeo = new THREE.BoxGeometry(0.16, 0.1, 0.12);
+    const headMat = new THREE.MeshLambertMaterial({ color: 0xf0e0d8, transparent: true, opacity: 0.6 });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 0.25, 0);
+    group.add(head);
+
+    const hornGeo = new THREE.BoxGeometry(0.03, 0.08, 0.03);
+    const hornMat = new THREE.MeshLambertMaterial({ color: 0xff7040, transparent: true, opacity: 0.75 });
+    const hornL = new THREE.Mesh(hornGeo, hornMat);
+    hornL.position.set(-0.04, 0.33, 0);
+    group.add(hornL);
+    const hornR = new THREE.Mesh(hornGeo, hornMat);
+    hornR.position.set(0.04, 0.33, 0);
+    group.add(hornR);
+
+    const wingGeo = new THREE.BoxGeometry(0.15, 0.1, 0.02);
+    const wingMat = new THREE.MeshLambertMaterial({ color: 0xf0e8e0, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    const wingL = new THREE.Mesh(wingGeo, wingMat);
+    wingL.position.set(-0.16, 0.08, 0);
+    wingL.name = 'wingL';
+    group.add(wingL);
+    const wingR = new THREE.Mesh(wingGeo, wingMat);
+    wingR.position.set(0.16, 0.08, 0);
+    wingR.name = 'wingR';
+    group.add(wingR);
+
+    const tailGeo = new THREE.BoxGeometry(0.1, 0.08, 0.08);
+    const tailMat = new THREE.MeshLambertMaterial({ color: 0xe0d0c8, transparent: true, opacity: 0.45 });
+    const tail = new THREE.Mesh(tailGeo, tailMat);
+    tail.position.set(0, -0.24, 0);
+    group.add(tail);
+
+    return group;
+}
+
+class Clione {
+    constructor(x, y, z) {
+        this.type = 'clione';
+        this.mesh = createClioneMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * SWIM_SPEED,
+            (Math.random() - 0.5) * 0.1,
+            (Math.random() - 0.5) * SWIM_SPEED
+        );
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 2 + Math.random() * 4;
+        this.alive = true;
+    }
+
+    update(dt, world) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        const wingL = this.mesh.getObjectByName('wingL');
+        const wingR = this.mesh.getObjectByName('wingR');
+        if (wingL && wingR) {
+            const flap = Math.sin(this.time * WING_FLAP_SPEED) * 0.5;
+            wingL.rotation.z = flap;
+            wingR.rotation.z = -flap;
+        }
+
+        this.mesh.position.y += Math.sin(this.time * BOB_SPEED) * 0.02 * dt;
+
+        this.dirChangeTimer -= dt;
+        if (this.dirChangeTimer <= 0) {
+            this.velocity.x = (Math.random() - 0.5) * SWIM_SPEED;
+            this.velocity.z = (Math.random() - 0.5) * SWIM_SPEED;
+            this.velocity.y = (Math.random() - 0.5) * 0.15;
+            this.dirChangeTimer = 2 + Math.random() * 5;
+        }
+
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const targetYaw = Math.atan2(this.velocity.x, this.velocity.z);
+            this.mesh.rotation.y += (targetYaw - this.mesh.rotation.y) * dt * 2;
+        }
+
+        this._stayInWater(world);
+    }
+
+    _stayInWater(world) {
+        const pos = this.mesh.position;
+        const bx = Math.floor(pos.x + 0.5), by = Math.floor(pos.y + 0.5), bz = Math.floor(pos.z + 0.5);
+        if (world.getBlock(bx, by, bz) !== BlockType.WATER) {
+            if (world.getBlock(bx, by + 1, bz) === BlockType.WATER) {
+                this.velocity.y = 0.3;
+            } else if (world.getBlock(bx, by - 1, bz) === BlockType.WATER) {
+                this.velocity.y = -0.3;
+            } else {
+                this.velocity.x *= -1;
+                this.velocity.z *= -1;
+            }
+        }
+        if (pos.y < 1) { pos.y = 1; this.velocity.y = Math.abs(this.velocity.y); }
+    }
+}
+
+// ============================================================
+// El Gran Maja - giant deep sea predator
+// Manta-ray shaped head, long eel body, 6 glowing eyes, sharp teeth
+// Hunts and eats Cliones. Does NOT attack player.
+// ============================================================
+
+const MAJA_SWIM_SPEED = 0.6;
+const MAJA_HUNT_SPEED = 1.8;
+const MAJA_EAT_RANGE = 1.5;
+
+function createMajaMesh() {
+    const group = new THREE.Group();
+    const blueColor = 0x4060a0;   // blue-indigo body
+    const darkBlue = 0x2a3a70;
+    const bellyColor = 0x5570b0;
+
+    // --- HEAD: snake-like rounded shape, wide and flat ---
+    // Upper head - wider and flatter
+    const headTopGeo = new THREE.SphereGeometry(0.8, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const headTopMat = new THREE.MeshLambertMaterial({ color: blueColor });
+    const headTop = new THREE.Mesh(headTopGeo, headTopMat);
+    headTop.scale.set(1.7, 0.55, 1.2);
+    headTop.position.set(0, 0.15, -1.5);
+    group.add(headTop);
+
+    // Snout - wider and flatter
+    const snoutGeo = new THREE.SphereGeometry(0.7, 8, 6);
+    const snoutMat = new THREE.MeshLambertMaterial({ color: blueColor });
+    const snout = new THREE.Mesh(snoutGeo, snoutMat);
+    snout.scale.set(1.5, 0.45, 0.9);
+    snout.position.set(0, 0.05, -2.1);
+    group.add(snout);
+
+    // --- EYES: 6 in a single horizontal row, slightly forward ---
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x40ffcc });
+    const eyeGlowMat = new THREE.MeshBasicMaterial({
+        color: 0x40ffcc, transparent: true, opacity: 0.35,
+    });
+    for (let i = 0; i < 6; i++) {
+        const xPos = (i - 2.5) * 0.18;
+        const eyeGeo = new THREE.SphereGeometry(0.065, 6, 6);
+        const eye = new THREE.Mesh(eyeGeo, eyeMat);
+        eye.position.set(xPos, 0.12, -2.7);
+        eye.name = `eye${i}`;
+        group.add(eye);
+
+        const glowGeo = new THREE.SphereGeometry(0.12, 6, 6);
+        const glow = new THREE.Mesh(glowGeo, eyeGlowMat.clone());
+        glow.position.set(xPos, 0.12, -2.7);
+        glow.name = `eyeGlow${i}`;
+        group.add(glow);
+    }
+
+    // --- MOUTH: huge gaping jaw with red gums ---
+    // Upper jaw
+    const upperJawGeo = new THREE.SphereGeometry(0.7, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+    const upperJawMat = new THREE.MeshLambertMaterial({ color: blueColor });
+    const upperJaw = new THREE.Mesh(upperJawGeo, upperJawMat);
+    upperJaw.scale.set(1.3, 0.3, 0.9);
+    upperJaw.rotation.x = Math.PI;
+    upperJaw.position.set(0, -0.2, -2.2);
+    group.add(upperJaw);
+
+    // Lower jaw (opens via y position, no rotation)
+    const lowerJawGroup = new THREE.Group();
+    lowerJawGroup.name = 'lowerJaw';
+    lowerJawGroup.position.set(0, -0.5, -2.15);
+
+    const lowerJawGeo = new THREE.BoxGeometry(1.4, 0.2, 0.7);
+    const lowerJawMat = new THREE.MeshLambertMaterial({ color: darkBlue });
+    const lowerJawMesh = new THREE.Mesh(lowerJawGeo, lowerJawMat);
+    lowerJawGroup.add(lowerJawMesh);
+
+    // Red gums on lower jaw
+    const gumMat = new THREE.MeshLambertMaterial({ color: 0xbb2020 });
+    const lowerGumGeo = new THREE.BoxGeometry(1.3, 0.06, 0.65);
+    const lowerGum = new THREE.Mesh(lowerGumGeo, gumMat);
+    lowerGum.position.set(0, 0.1, 0);
+    lowerJawGroup.add(lowerGum);
+
+    // Lower teeth - big sharp
+    const toothMat = new THREE.MeshLambertMaterial({ color: 0xe8e8dd });
+    for (let i = -5; i <= 5; i++) {
+        const h = 0.2 + Math.random() * 0.12;
+        const toothGeo = new THREE.ConeGeometry(0.04, h, 4);
+        const tooth = new THREE.Mesh(toothGeo, toothMat);
+        tooth.position.set(i * 0.11, 0.1 + h / 2, -0.05);
+        lowerJawGroup.add(tooth);
+    }
+    group.add(lowerJawGroup);
+
+    // Red gums on upper jaw
+    const upperGumGeo = new THREE.BoxGeometry(1.4, 0.06, 0.7);
+    const upperGum = new THREE.Mesh(upperGumGeo, gumMat);
+    upperGum.position.set(0, -0.27, -2.2);
+    group.add(upperGum);
+
+    // Upper teeth - big sharp, pointing down
+    for (let i = -6; i <= 6; i++) {
+        const h = 0.22 + Math.random() * 0.15;
+        const toothGeo = new THREE.ConeGeometry(0.045, h, 4);
+        const tooth = new THREE.Mesh(toothGeo, toothMat);
+        tooth.position.set(i * 0.1, -0.27 - h / 2, -2.25);
+        tooth.rotation.x = Math.PI;
+        group.add(tooth);
+    }
+
+    // Mouth interior - dark red
+    const mouthGeo = new THREE.BoxGeometry(1.1, 0.35, 0.5);
+    const mouthMat = new THREE.MeshLambertMaterial({ color: 0x3a0808 });
+    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+    mouth.position.set(0, -0.18, -1.9);
+    group.add(mouth);
+
+    // --- BODY: long snake/eel-like segments, rounded ---
+    const segmentCount = 8;
+    for (let i = 0; i < segmentCount; i++) {
+        const t = i / segmentCount;
+        const radius = 0.7 * (1 - t * 0.55);
+        const segGeo = new THREE.SphereGeometry(radius, 8, 6);
+        const segMat = new THREE.MeshLambertMaterial({
+            color: new THREE.Color(blueColor).lerp(new THREE.Color(bellyColor), t * 0.3),
+        });
+        const seg = new THREE.Mesh(segGeo, segMat);
+        seg.scale.set(1, 0.7, 0.9);
+        seg.position.set(0, -0.03 * i, i * 0.55);
+        seg.name = `bodySegment${i}`;
+        group.add(seg);
+    }
+
+    // --- TAIL: tapered end ---
+    const tailGeo = new THREE.SphereGeometry(0.25, 6, 5);
+    const tailMat = new THREE.MeshLambertMaterial({ color: darkBlue });
+    const tail = new THREE.Mesh(tailGeo, tailMat);
+    tail.scale.set(1, 0.6, 2);
+    tail.position.set(0, -0.2, segmentCount * 0.55 + 0.3);
+    tail.name = 'tail';
+    group.add(tail);
+
+    const tailFinGeo = new THREE.BoxGeometry(0.6, 0.04, 0.4);
+    const tailFin = new THREE.Mesh(tailFinGeo, new THREE.MeshLambertMaterial({ color: blueColor }));
+    tailFin.position.set(0, -0.15, segmentCount * 0.55 + 0.7);
+    tailFin.name = 'tailFin';
+    group.add(tailFin);
+
+    return group;
+}
+
+class ElGranMaja {
+    constructor(x, y, z) {
+        this.type = 'maja';
+        this.mesh = createMajaMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * MAJA_SWIM_SPEED,
+            0,
+            (Math.random() - 0.5) * MAJA_SWIM_SPEED
+        );
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 3 + Math.random() * 5;
+        this.alive = true;
+        this.huntTarget = null;
+        this.jawOpen = 0;
+        this.eating = false;
+        this.eatTimer = 0;
+    }
+
+    update(dt, world, cliones) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Eye glow pulsing
+        for (let i = 0; i < 6; i++) {
+            const glow = this.mesh.getObjectByName(`eyeGlow${i}`);
+            if (glow) {
+                glow.material.opacity = 0.2 + Math.sin(this.time * 3 + i) * 0.15;
+            }
+        }
+
+        // Body wave - snake-like undulation
+        for (let i = 0; i < 8; i++) {
+            const seg = this.mesh.getObjectByName(`bodySegment${i}`);
+            if (seg) {
+                seg.position.x = Math.sin(this.time * 2 + i * 0.7) * 0.06 * i;
+            }
+        }
+        const tail = this.mesh.getObjectByName('tail');
+        if (tail) tail.position.x = Math.sin(this.time * 2 + 6) * 0.15;
+        const tailFin = this.mesh.getObjectByName('tailFin');
+        if (tailFin) tailFin.rotation.y = Math.sin(this.time * 2.5) * 0.3;
+
+        // Jaw animation - move down to open
+        const lowerJaw = this.mesh.getObjectByName('lowerJaw');
+        if (lowerJaw) {
+            const targetJaw = this.eating ? 0.35 : (this.huntTarget ? 0.15 : 0);
+            this.jawOpen += (targetJaw - this.jawOpen) * dt * 3;
+            lowerJaw.position.y = -0.5 - this.jawOpen;
+        }
+
+        // --- HUNTING AI: find nearest clione ---
+        this.huntTarget = null;
+        let nearestDist = 15; // detection range
+        const myPos = this.mesh.position;
+
+        for (const c of cliones) {
+            if (!c.alive) continue;
+            const dx = c.mesh.position.x - myPos.x;
+            const dy = c.mesh.position.y - myPos.y;
+            const dz = c.mesh.position.z - myPos.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                this.huntTarget = c;
+            }
+        }
+
+        // Eating cooldown
+        if (this.eating) {
+            this.eatTimer -= dt;
+            if (this.eatTimer <= 0) this.eating = false;
+        }
+
+        if (this.huntTarget && !this.eating) {
+            // Chase clione
+            const target = this.huntTarget.mesh.position;
+            const dir = new THREE.Vector3(
+                target.x - myPos.x,
+                target.y - myPos.y,
+                target.z - myPos.z
+            );
+            const dist = dir.length();
+            if (dist > 0.1) dir.normalize();
+
+            this.velocity.x += dir.x * MAJA_HUNT_SPEED * dt * 2;
+            this.velocity.y += dir.y * MAJA_HUNT_SPEED * dt * 2;
+            this.velocity.z += dir.z * MAJA_HUNT_SPEED * dt * 2;
+
+            // Clamp speed
+            const speed = this.velocity.length();
+            if (speed > MAJA_HUNT_SPEED) {
+                this.velocity.multiplyScalar(MAJA_HUNT_SPEED / speed);
+            }
+
+            // Eat clione if close enough
+            if (dist < MAJA_EAT_RANGE) {
+                this.huntTarget.alive = false;
+                this.eating = true;
+                this.eatTimer = 1.5;
+            }
+        } else if (!this.eating) {
+            // Idle swimming
+            this.dirChangeTimer -= dt;
+            if (this.dirChangeTimer <= 0) {
+                this.velocity.x = (Math.random() - 0.5) * MAJA_SWIM_SPEED;
+                this.velocity.z = (Math.random() - 0.5) * MAJA_SWIM_SPEED;
+                this.velocity.y = (Math.random() - 0.5) * 0.2;
+                this.dirChangeTimer = 3 + Math.random() * 5;
+            }
+        }
+
+        // Move
+        myPos.x += this.velocity.x * dt;
+        myPos.y += this.velocity.y * dt;
+        myPos.z += this.velocity.z * dt;
+
+        // Gentle bob
+        myPos.y += Math.sin(this.time * 0.8) * 0.01 * dt;
+
+        // Face movement direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const targetYaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            // Smooth rotation
+            let diff = targetYaw - this.mesh.rotation.y;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
+
+        // Stay in water
+        this._stayInWater(world);
+    }
+
+    _stayInWater(world) {
+        const pos = this.mesh.position;
+        const bx = Math.floor(pos.x + 0.5), by = Math.floor(pos.y + 0.5), bz = Math.floor(pos.z + 0.5);
+        if (world.getBlock(bx, by, bz) !== BlockType.WATER) {
+            if (world.getBlock(bx, by + 1, bz) === BlockType.WATER) {
+                this.velocity.y = 0.4;
+            } else if (world.getBlock(bx, by - 1, bz) === BlockType.WATER) {
+                this.velocity.y = -0.4;
+            } else {
+                this.velocity.x *= -1;
+                this.velocity.z *= -1;
+            }
+        }
+        if (pos.y < 1) { pos.y = 1; this.velocity.y = Math.abs(this.velocity.y); }
+    }
+}
+
+// ============================================================
+// Bloop - giant pale sea creature
+// Huge gaping mouth, light gray/beige body, small eyes
+// Natural spawn only. Hunts Cliones. Fights El Gran Maja (loses after 5s).
+// ============================================================
+
+const BLOOP_SWIM_SPEED = 0.5;
+const BLOOP_HUNT_SPEED = 1.6;
+const BLOOP_CHARGE_SPEED = 3.5;
+const BLOOP_EAT_RANGE = 1.5;
+const BLOOP_FIGHT_RANGE = 15;
+const BLOOP_FIGHT_DURATION = 5;
+
+function createBloopMesh() {
+    const group = new THREE.Group();
+    const olive = 0x8a8a50;       // main body olive/khaki
+    const darkOlive = 0x707040;   // darker shade
+    const belly = 0xa0a070;       // lighter underside
+    const mouthRed = 0xaa3020;    // red mouth interior
+
+    // All BoxGeometry for voxel/blocky Minecraft style
+
+    // --- HEAD: big blocky snout ---
+    const headGeo = new THREE.BoxGeometry(1.6, 1.0, 1.8);
+    const headMat = new THREE.MeshLambertMaterial({ color: olive });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 0.1, -1.8);
+    group.add(head);
+
+    // Snout top (slightly narrower front block)
+    const snoutGeo = new THREE.BoxGeometry(1.4, 0.5, 0.8);
+    const snoutMat = new THREE.MeshLambertMaterial({ color: olive });
+    const snout = new THREE.Mesh(snoutGeo, snoutMat);
+    snout.position.set(0, 0.3, -2.9);
+    group.add(snout);
+
+    // --- EYES: 2 small dark blocky eyes ---
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
+    const eyeGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.5, 0.5, -2.6);
+    group.add(eyeL);
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeR.position.set(0.5, 0.5, -2.6);
+    group.add(eyeR);
+
+    // --- UPPER JAW ---
+    const upperJawGeo = new THREE.BoxGeometry(1.5, 0.3, 1.0);
+    const upperJawMat = new THREE.MeshLambertMaterial({ color: olive });
+    const upperJaw = new THREE.Mesh(upperJawGeo, upperJawMat);
+    upperJaw.position.set(0, -0.15, -2.8);
+    group.add(upperJaw);
+
+    // Upper gum (red/pink strip)
+    const gumMat = new THREE.MeshLambertMaterial({ color: mouthRed });
+    const upperGum = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.08, 0.9), gumMat);
+    upperGum.position.set(0, -0.35, -2.8);
+    group.add(upperGum);
+
+    // Upper teeth - blocky rectangles
+    const toothMat = new THREE.MeshLambertMaterial({ color: 0xe8e0c8 });
+    for (let i = -4; i <= 4; i++) {
+        const h = 0.18 + Math.random() * 0.08;
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.1, h, 0.08), toothMat);
+        tooth.position.set(i * 0.14, -0.35 - h / 2, -3.15);
+        group.add(tooth);
+    }
+
+    // --- LOWER JAW (movable) ---
+    const lowerJawGroup = new THREE.Group();
+    lowerJawGroup.name = 'lowerJaw';
+    lowerJawGroup.position.set(0, -0.55, -2.6);
+
+    const lowerJawGeo = new THREE.BoxGeometry(1.4, 0.25, 1.0);
+    const lowerJawMat = new THREE.MeshLambertMaterial({ color: belly });
+    lowerJawGroup.add(new THREE.Mesh(lowerJawGeo, lowerJawMat));
+
+    // Lower gum
+    const lowerGum = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.9), gumMat);
+    lowerGum.position.set(0, 0.15, 0);
+    lowerJawGroup.add(lowerGum);
+
+    // Lower teeth - blocky
+    for (let i = -4; i <= 4; i++) {
+        const h = 0.15 + Math.random() * 0.06;
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.09, h, 0.07), toothMat);
+        tooth.position.set(i * 0.14, 0.15 + h / 2, -0.3);
+        lowerJawGroup.add(tooth);
+    }
+    group.add(lowerJawGroup);
+
+    // --- MOUTH INTERIOR: deep red ---
+    const mouthInner = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 0.5, 0.8),
+        new THREE.MeshLambertMaterial({ color: mouthRed })
+    );
+    mouthInner.position.set(0, -0.35, -2.5);
+    group.add(mouthInner);
+
+    // --- BODY: blocky segments, getting narrower ---
+    const segCount = 6;
+    for (let i = 0; i < segCount; i++) {
+        const t = i / segCount;
+        const w = 1.5 * (1 - t * 0.5);
+        const h = 1.0 * (1 - t * 0.4);
+        const seg = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, 0.7),
+            new THREE.MeshLambertMaterial({
+                color: new THREE.Color(olive).lerp(new THREE.Color(darkOlive), t * 0.5),
+            })
+        );
+        seg.position.set(0, -0.02 * i, i * 0.65);
+        seg.name = `bodySegment${i}`;
+        group.add(seg);
+    }
+
+    // Belly (lighter underside strip)
+    for (let i = 0; i < 4; i++) {
+        const bw = 0.7 * (1 - i * 0.12);
+        const bellyBlock = new THREE.Mesh(
+            new THREE.BoxGeometry(bw, 0.08, 0.6),
+            new THREE.MeshLambertMaterial({ color: belly })
+        );
+        bellyBlock.position.set(0, -0.45 - i * 0.02, i * 0.65);
+        group.add(bellyBlock);
+    }
+
+    // --- FINS: blocky side fins ---
+    const finMat = new THREE.MeshLambertMaterial({ color: darkOlive });
+    // Left pectoral fin
+    const finL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.08, 0.5), finMat);
+    finL.position.set(-0.9, -0.3, -0.5);
+    finL.rotation.z = -0.3;
+    finL.name = 'finL';
+    group.add(finL);
+    // Right pectoral fin
+    const finR = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.08, 0.5), finMat);
+    finR.position.set(0.9, -0.3, -0.5);
+    finR.rotation.z = 0.3;
+    finR.name = 'finR';
+    group.add(finR);
+
+    // Dorsal fin (top)
+    const dorsalFin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.6), finMat);
+    dorsalFin.position.set(0, 0.6, -0.3);
+    group.add(dorsalFin);
+
+    // --- TAIL: blocky v-shape ---
+    const tailBase = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.6), finMat);
+    tailBase.position.set(0, -0.1, segCount * 0.65 + 0.2);
+    tailBase.name = 'tail';
+    group.add(tailBase);
+
+    const tailFinUp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.4), finMat);
+    tailFinUp.position.set(0, 0.2, segCount * 0.65 + 0.5);
+    tailFinUp.rotation.x = -0.3;
+    tailFinUp.name = 'tailFin';
+    group.add(tailFinUp);
+
+    const tailFinDown = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.35), finMat);
+    tailFinDown.position.set(0, -0.35, segCount * 0.65 + 0.5);
+    tailFinDown.rotation.x = 0.3;
+    group.add(tailFinDown);
+
+    return group;
+}
+
+class Bloop {
+    constructor(x, y, z) {
+        this.type = 'bloop';
+        this.mesh = createBloopMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * BLOOP_SWIM_SPEED,
+            0,
+            (Math.random() - 0.5) * BLOOP_SWIM_SPEED
+        );
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 3 + Math.random() * 4;
+        this.alive = true;
+        this.huntTarget = null;
+        this.jawOpen = 0;
+        this.eating = false;
+        this.eatTimer = 0;
+
+        // Fighting state
+        this.fightTarget = null;
+        this.fighting = false;
+        this.fightTimer = 0;
+    }
+
+    update(dt, world, cliones, majas) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Body wave
+        for (let i = 0; i < 7; i++) {
+            const seg = this.mesh.getObjectByName(`bodySegment${i}`);
+            if (seg) seg.position.x = Math.sin(this.time * 1.5 + i * 0.6) * 0.05 * i;
+        }
+        const tail = this.mesh.getObjectByName('tail');
+        if (tail) tail.position.x = Math.sin(this.time * 1.8 + 5) * 0.12;
+
+        // Jaw
+        const lowerJaw = this.mesh.getObjectByName('lowerJaw');
+        if (lowerJaw) {
+            const targetJaw = this.eating || this.fighting ? 0.35 : (this.huntTarget ? 0.12 : 0);
+            this.jawOpen += (targetJaw - this.jawOpen) * dt * 3;
+            lowerJaw.position.y = -0.45 - this.jawOpen;
+        }
+
+        const myPos = this.mesh.position;
+
+        // --- FIGHTING: check for nearby El Gran Maja ---
+        if (this.fighting) {
+            this.fightTimer -= dt;
+            if (this.fightTarget && this.fightTarget.alive) {
+                // Rush toward Maja
+                const target = this.fightTarget.mesh.position;
+                const dir = new THREE.Vector3(target.x - myPos.x, target.y - myPos.y, target.z - myPos.z);
+                const dist = dir.length();
+                if (dist > 0.5) {
+                    dir.normalize();
+                    this.velocity.set(dir.x * BLOOP_CHARGE_SPEED, dir.y * BLOOP_CHARGE_SPEED * 0.5, dir.z * BLOOP_CHARGE_SPEED);
+                } else {
+                    this.velocity.set(0, 0, 0);
+                }
+            }
+            if (this.fightTimer <= 0) {
+                // Bloop loses the fight and dies
+                this.alive = false;
+                return;
+            }
+        } else {
+            // Check for nearby Majas to fight
+            for (const maja of majas) {
+                if (!maja.alive) continue;
+                const dx = maja.mesh.position.x - myPos.x;
+                const dy = maja.mesh.position.y - myPos.y;
+                const dz = maja.mesh.position.z - myPos.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < BLOOP_FIGHT_RANGE) {
+                    this.fighting = true;
+                    this.fightTarget = maja;
+                    this.fightTimer = BLOOP_FIGHT_DURATION;
+                    break;
+                }
+            }
+        }
+
+        // --- HUNTING CLIONES (when not fighting) ---
+        if (!this.fighting) {
+            if (this.eating) {
+                this.eatTimer -= dt;
+                if (this.eatTimer <= 0) this.eating = false;
+            }
+
+            this.huntTarget = null;
+            let nearestDist = 15;
+            for (const c of cliones) {
+                if (!c.alive) continue;
+                const dx = c.mesh.position.x - myPos.x;
+                const dy = c.mesh.position.y - myPos.y;
+                const dz = c.mesh.position.z - myPos.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    this.huntTarget = c;
+                }
+            }
+
+            if (this.huntTarget && !this.eating) {
+                const target = this.huntTarget.mesh.position;
+                const dir = new THREE.Vector3(target.x - myPos.x, target.y - myPos.y, target.z - myPos.z);
+                const dist = dir.length();
+                if (dist > 0.1) dir.normalize();
+                this.velocity.x += dir.x * BLOOP_HUNT_SPEED * dt * 2;
+                this.velocity.y += dir.y * BLOOP_HUNT_SPEED * dt * 2;
+                this.velocity.z += dir.z * BLOOP_HUNT_SPEED * dt * 2;
+                const speed = this.velocity.length();
+                if (speed > BLOOP_HUNT_SPEED) this.velocity.multiplyScalar(BLOOP_HUNT_SPEED / speed);
+
+                if (dist < BLOOP_EAT_RANGE) {
+                    this.huntTarget.alive = false;
+                    this.eating = true;
+                    this.eatTimer = 1.5;
+                }
+            } else if (!this.eating) {
+                this.dirChangeTimer -= dt;
+                if (this.dirChangeTimer <= 0) {
+                    this.velocity.x = (Math.random() - 0.5) * BLOOP_SWIM_SPEED;
+                    this.velocity.z = (Math.random() - 0.5) * BLOOP_SWIM_SPEED;
+                    this.velocity.y = (Math.random() - 0.5) * 0.2;
+                    this.dirChangeTimer = 3 + Math.random() * 4;
+                }
+            }
+        }
+
+        // Move
+        myPos.x += this.velocity.x * dt;
+        myPos.y += this.velocity.y * dt;
+        myPos.z += this.velocity.z * dt;
+        myPos.y += Math.sin(this.time * 0.7) * 0.01 * dt;
+
+        // Face direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const targetYaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = targetYaw - this.mesh.rotation.y;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
+
+        this._stayInWater(world);
+    }
+
+    _stayInWater(world) {
+        const pos = this.mesh.position;
+        const bx = Math.floor(pos.x + 0.5), by = Math.floor(pos.y + 0.5), bz = Math.floor(pos.z + 0.5);
+        if (world.getBlock(bx, by, bz) !== BlockType.WATER) {
+            if (world.getBlock(bx, by + 1, bz) === BlockType.WATER) this.velocity.y = 0.4;
+            else if (world.getBlock(bx, by - 1, bz) === BlockType.WATER) this.velocity.y = -0.4;
+            else { this.velocity.x *= -1; this.velocity.z *= -1; }
+        }
+        if (pos.y < 1) { pos.y = 1; this.velocity.y = Math.abs(this.velocity.y); }
+    }
+}
+
+// ============================================================
+// Meowl - flying cat-owl hybrid
+// Cat head with big round eyes, owl body with wings
+// Flies in the sky, natural spawn only. Peaceful.
+// ============================================================
+
+const MEOWL_FLY_SPEED = 1.2;
+const MEOWL_WING_SPEED = 4;
+
+function createMeowlMesh() {
+    const group = new THREE.Group();
+    const tabbyBrown = 0x8b7355;
+    const tabbyDark = 0x6b5535;
+    const white = 0xf0ece0;
+    const pinkNose = 0xeea0a0;
+
+    // --- HEAD: cat-shaped, blocky ---
+    const headGeo = new THREE.BoxGeometry(0.7, 0.65, 0.6);
+    const headMat = new THREE.MeshLambertMaterial({ color: tabbyBrown });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 0.55, -0.3);
+    group.add(head);
+
+    // White face patch (lower face)
+    const facePatch = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.35, 0.05),
+        new THREE.MeshLambertMaterial({ color: white })
+    );
+    facePatch.position.set(0, 0.45, -0.63);
+    group.add(facePatch);
+
+    // Cat ears - two triangular blocks
+    const earMat = new THREE.MeshLambertMaterial({ color: tabbyBrown });
+    const earInnerMat = new THREE.MeshLambertMaterial({ color: pinkNose });
+
+    const earL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.25, 0.15), earMat);
+    earL.position.set(-0.22, 0.95, -0.3);
+    earL.rotation.z = 0.15;
+    group.add(earL);
+    const earLInner = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.05), earInnerMat);
+    earLInner.position.set(-0.22, 0.93, -0.38);
+    group.add(earLInner);
+
+    const earR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.25, 0.15), earMat);
+    earR.position.set(0.22, 0.95, -0.3);
+    earR.rotation.z = -0.15;
+    group.add(earR);
+    const earRInner = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.05), earInnerMat);
+    earRInner.position.set(0.22, 0.93, -0.38);
+    group.add(earRInner);
+
+    // Big round cat eyes (large, cute)
+    const eyeWhiteMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const eyePupilMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
+
+    // Left eye
+    const eyeWhiteL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.22, 0.05), eyeWhiteMat);
+    eyeWhiteL.position.set(-0.15, 0.58, -0.63);
+    group.add(eyeWhiteL);
+    const pupilL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.06), eyePupilMat);
+    pupilL.position.set(-0.15, 0.57, -0.65);
+    group.add(pupilL);
+
+    // Right eye
+    const eyeWhiteR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.22, 0.05), eyeWhiteMat);
+    eyeWhiteR.position.set(0.15, 0.58, -0.63);
+    group.add(eyeWhiteR);
+    const pupilR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.06), eyePupilMat);
+    pupilR.position.set(0.15, 0.57, -0.65);
+    group.add(pupilR);
+
+    // Pink nose
+    const nose = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.06, 0.06),
+        new THREE.MeshLambertMaterial({ color: pinkNose })
+    );
+    nose.position.set(0, 0.44, -0.65);
+    group.add(nose);
+
+    // Whisker marks (dark lines on cheeks)
+    const whiskerMat = new THREE.MeshLambertMaterial({ color: tabbyDark });
+    for (const side of [-1, 1]) {
+        for (let j = 0; j < 2; j++) {
+            const w = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, 0.02), whiskerMat);
+            w.position.set(side * 0.28, 0.42 - j * 0.06, -0.55);
+            group.add(w);
+        }
+    }
+
+    // Tabby stripes on forehead
+    for (let i = 0; i < 3; i++) {
+        const stripe = new THREE.Mesh(
+            new THREE.BoxGeometry(0.35 - i * 0.08, 0.04, 0.05),
+            new THREE.MeshLambertMaterial({ color: tabbyDark })
+        );
+        stripe.position.set(0, 0.72 + i * 0.07, -0.63);
+        group.add(stripe);
+    }
+
+    // --- BODY: owl-shaped, round and plump ---
+    const bodyGeo = new THREE.BoxGeometry(0.8, 0.7, 0.9);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: tabbyBrown });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.set(0, 0.05, 0.15);
+    group.add(body);
+
+    // White chest (owl breast)
+    const chest = new THREE.Mesh(
+        new THREE.BoxGeometry(0.55, 0.55, 0.05),
+        new THREE.MeshLambertMaterial({ color: white })
+    );
+    chest.position.set(0, 0.05, -0.3);
+    group.add(chest);
+
+    // Brown/tan feather pattern on chest
+    const featherMat = new THREE.MeshLambertMaterial({ color: 0xc0a878 });
+    for (let i = 0; i < 3; i++) {
+        const feather = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.04, 0.06), featherMat);
+        feather.position.set(0, -0.05 + i * 0.12, -0.28);
+        group.add(feather);
+    }
+
+    // --- WINGS: owl wings, flap up/down ---
+    const wingMat = new THREE.MeshLambertMaterial({ color: tabbyBrown });
+    const wingTipMat = new THREE.MeshLambertMaterial({ color: tabbyDark });
+
+    // Left wing
+    const wingLGroup = new THREE.Group();
+    wingLGroup.name = 'wingL';
+    wingLGroup.position.set(-0.4, 0.15, 0.15);
+    const wingLMain = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.7), wingMat);
+    wingLMain.position.set(-0.3, 0, 0);
+    wingLGroup.add(wingLMain);
+    const wingLTip = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.06, 0.5), wingTipMat);
+    wingLTip.position.set(-0.55, 0, 0.05);
+    wingLGroup.add(wingLTip);
+    group.add(wingLGroup);
+
+    // Right wing
+    const wingRGroup = new THREE.Group();
+    wingRGroup.name = 'wingR';
+    wingRGroup.position.set(0.4, 0.15, 0.15);
+    const wingRMain = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.7), wingMat);
+    wingRMain.position.set(0.3, 0, 0);
+    wingRGroup.add(wingRMain);
+    const wingRTip = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.06, 0.5), wingTipMat);
+    wingRTip.position.set(0.55, 0, 0.05);
+    wingRGroup.add(wingRTip);
+    group.add(wingRGroup);
+
+    // --- TAIL: short owl tail feathers ---
+    const tailGeo = new THREE.BoxGeometry(0.35, 0.06, 0.3);
+    const tailMesh = new THREE.Mesh(tailGeo, new THREE.MeshLambertMaterial({ color: tabbyDark }));
+    tailMesh.position.set(0, -0.05, 0.65);
+    tailMesh.name = 'tail';
+    group.add(tailMesh);
+
+    // --- FEET: small owl talons ---
+    const footMat = new THREE.MeshLambertMaterial({ color: 0xd4a050 });
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.15), footMat);
+    footL.position.set(-0.15, -0.35, 0.1);
+    group.add(footL);
+    const footR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.15), footMat);
+    footR.position.set(0.15, -0.35, 0.1);
+    group.add(footR);
+
+    return group;
+}
+
+class Meowl {
+    constructor(x, y, z) {
+        this.type = 'meowl';
+        this.mesh = createMeowlMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * MEOWL_FLY_SPEED,
+            0,
+            (Math.random() - 0.5) * MEOWL_FLY_SPEED
+        );
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 3 + Math.random() * 5;
+        this.alive = true;
+    }
+
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Wing flapping
+        const wingL = this.mesh.getObjectByName('wingL');
+        const wingR = this.mesh.getObjectByName('wingR');
+        if (wingL && wingR) {
+            const flap = Math.sin(this.time * MEOWL_WING_SPEED) * 0.6;
+            wingL.rotation.z = flap;
+            wingR.rotation.z = -flap;
+        }
+
+        // Gentle bob up/down
+        this.mesh.position.y += Math.sin(this.time * 1.5) * 0.015 * dt;
+
+        // Tail sway
+        const tail = this.mesh.getObjectByName('tail');
+        if (tail) tail.rotation.y = Math.sin(this.time * 2) * 0.2;
+
+        // Change direction
+        this.dirChangeTimer -= dt;
+        if (this.dirChangeTimer <= 0) {
+            this.velocity.x = (Math.random() - 0.5) * MEOWL_FLY_SPEED;
+            this.velocity.z = (Math.random() - 0.5) * MEOWL_FLY_SPEED;
+            this.velocity.y = (Math.random() - 0.5) * 0.3;
+            this.dirChangeTimer = 3 + Math.random() * 5;
+        }
+
+        // Move
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+
+        // Stay in sky (between y 30-55)
+        if (pos.y < 30) { pos.y = 30; this.velocity.y = Math.abs(this.velocity.y) + 0.2; }
+        if (pos.y > 55) { pos.y = 55; this.velocity.y = -Math.abs(this.velocity.y) - 0.2; }
+
+        // Face movement direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const targetYaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = targetYaw - this.mesh.rotation.y;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 3;
+        }
+
+        // Slight tilt when turning
+        this.mesh.rotation.z = -this.velocity.x * 0.15;
+    }
+}
+
+// ============================================================
+// Wither - summoned by placing Black Skull on Soul Dirt
+// Size scales with connected Soul Dirt blocks. Flies, hostile to all mobs.
+// ============================================================
+
+function createWitherMesh(scale) {
+    const group = new THREE.Group();
+    const dark = 0x1a1a1a;
+    const bone = 0x2a2a2a;
+    const eye = 0xccff00;
+    const s = scale;
+
+    // Center head
+    const headGeo = new THREE.BoxGeometry(0.6 * s, 0.6 * s, 0.6 * s);
+    const headMat = new THREE.MeshLambertMaterial({ color: dark });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 0.5 * s, 0);
+    group.add(head);
+
+    // Center eyes (glowing yellow)
+    const eyeMat = new THREE.MeshBasicMaterial({ color: eye });
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.12 * s, 0.1 * s, 0.05 * s), eyeMat);
+    eyeL.position.set(-0.15 * s, 0.55 * s, -0.32 * s);
+    group.add(eyeL);
+    const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.12 * s, 0.1 * s, 0.05 * s), eyeMat);
+    eyeR.position.set(0.15 * s, 0.55 * s, -0.32 * s);
+    group.add(eyeR);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.2 * s, 0.06 * s, 0.05 * s), eyeMat);
+    mouth.position.set(0, 0.38 * s, -0.32 * s);
+    group.add(mouth);
+
+    // Left head
+    const headL = new THREE.Mesh(new THREE.BoxGeometry(0.45 * s, 0.45 * s, 0.45 * s), headMat);
+    headL.position.set(-0.6 * s, 0.3 * s, 0);
+    group.add(headL);
+    const eyeLL = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.08 * s, 0.05 * s), eyeMat);
+    eyeLL.position.set(-0.7 * s, 0.35 * s, -0.25 * s);
+    group.add(eyeLL);
+    const eyeLR = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.08 * s, 0.05 * s), eyeMat);
+    eyeLR.position.set(-0.5 * s, 0.35 * s, -0.25 * s);
+    group.add(eyeLR);
+
+    // Right head
+    const headR = new THREE.Mesh(new THREE.BoxGeometry(0.45 * s, 0.45 * s, 0.45 * s), headMat);
+    headR.position.set(0.6 * s, 0.3 * s, 0);
+    group.add(headR);
+    const eyeRL = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.08 * s, 0.05 * s), eyeMat);
+    eyeRL.position.set(0.5 * s, 0.35 * s, -0.25 * s);
+    group.add(eyeRL);
+    const eyeRR = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.08 * s, 0.05 * s), eyeMat);
+    eyeRR.position.set(0.7 * s, 0.35 * s, -0.25 * s);
+    group.add(eyeRR);
+
+    // Spine / ribcage
+    const spineMat = new THREE.MeshLambertMaterial({ color: bone });
+    for (let i = 0; i < 5; i++) {
+        const ribW = (0.8 - i * 0.1) * s;
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(ribW, 0.15 * s, 0.2 * s), spineMat);
+        rib.position.set(0, -i * 0.25 * s, 0);
+        rib.name = `rib${i}`;
+        group.add(rib);
+    }
+
+    // Tail (tapered)
+    const tailGeo = new THREE.BoxGeometry(0.15 * s, 0.15 * s, 0.4 * s);
+    const tail = new THREE.Mesh(tailGeo, spineMat);
+    tail.position.set(0, -1.3 * s, 0.1 * s);
+    tail.name = 'tail';
+    group.add(tail);
+
+    return group;
+}
+
+class Wither {
+    constructor(x, y, z, scale) {
+        this.type = 'wither';
+        this.scale = scale;
+        this.mesh = createWitherMesh(scale);
+        this.mesh.position.set(x, y + 1, z);
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 1.5,
+            0.5,
+            (Math.random() - 0.5) * 1.5
+        );
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 2 + Math.random() * 3;
+        this.alive = true;
+        this.huntTarget = null;
+        this.tamed = false;
+    }
+
+    update(dt, world, allMobs, playerX, playerY, playerZ) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Rib wave animation
+        for (let i = 0; i < 5; i++) {
+            const rib = this.mesh.getObjectByName(`rib${i}`);
+            if (rib) rib.position.x = Math.sin(this.time * 3 + i * 0.8) * 0.05 * this.scale;
+        }
+        const tail = this.mesh.getObjectByName('tail');
+        if (tail) tail.rotation.y = Math.sin(this.time * 2.5) * 0.4;
+
+        const myPos = this.mesh.position;
+        const speed = 2.0;
+
+        if (this.tamed) {
+            // Follow player if far
+            const pdx = playerX - myPos.x, pdy = playerY - myPos.y, pdz = playerZ - myPos.z;
+            const pDist = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz);
+            if (pDist > 12) {
+                const s = 4.0 / pDist;
+                this.velocity.set(pdx * s, pdy * s, pdz * s);
+            } else {
+                // Idle near player
+                this.dirChangeTimer -= dt;
+                if (this.dirChangeTimer <= 0) {
+                    this.velocity.x = (Math.random() - 0.5) * 0.8;
+                    this.velocity.z = (Math.random() - 0.5) * 0.8;
+                    this.velocity.y = (Math.random() - 0.5) * 0.3;
+                    this.dirChangeTimer = 2 + Math.random() * 3;
+                }
+            }
+        } else {
+            // Hunt nearest non-wither mob
+            this.huntTarget = null;
+            let nearestDist = 20;
+            for (const m of allMobs) {
+                if (!m.alive || m.type === 'wither') continue;
+                const dx = m.mesh.position.x - myPos.x;
+                const dy = m.mesh.position.y - myPos.y;
+                const dz = m.mesh.position.z - myPos.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    this.huntTarget = m;
+                }
+            }
+
+            if (this.huntTarget) {
+                const t = this.huntTarget.mesh.position;
+                const dx = t.x - myPos.x, dy = t.y - myPos.y, dz = t.z - myPos.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist > 1.5) {
+                    const s = speed / dist;
+                    this.velocity.set(dx * s, dy * s, dz * s);
+                } else {
+                    this.huntTarget.alive = false;
+                    this.huntTarget = null;
+                }
+            } else {
+                this.dirChangeTimer -= dt;
+                if (this.dirChangeTimer <= 0) {
+                    this.velocity.x = (Math.random() - 0.5) * 1.5;
+                    this.velocity.z = (Math.random() - 0.5) * 1.5;
+                    this.velocity.y = (Math.random() - 0.5) * 0.5;
+                    this.dirChangeTimer = 2 + Math.random() * 3;
+                }
+            }
+        }
+
+        myPos.x += this.velocity.x * dt;
+        myPos.y += this.velocity.y * dt;
+        myPos.z += this.velocity.z * dt;
+        myPos.y += Math.sin(this.time * 1.2) * 0.02;
+
+        // Stay above ground
+        if (myPos.y < 22) myPos.y = 22;
+        if (myPos.y > 50) myPos.y = 50;
+
+        // Face direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const targetYaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = targetYaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 3;
+        }
+    }
+}
+
+// ============================================================
+// Ghast - Nether flying mob, tame with Fire to ride
+// ============================================================
+
+function createGhastMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+
+    group.add(bm(2.2, 2.2, 2.2, 0xe8e8e8));
+    // Cheek bumps
+    group.add(bm(0.3,0.3,0.15, 0xdddddd)).position.set(-0.7, 0, -1.15);
+    group.add(bm(0.3,0.3,0.15, 0xdddddd)).position.set(0.7, 0, -1.15);
+    // Eyes
+    for (const [sx, name] of [[-0.4,'eyeL'],[0.4,'eyeR']]) {
+        group.add(bm(0.4,0.45,0.1, 0xffffff)).position.set(sx, 0.25, -1.15);
+        const pupil = gm(0.2,0.3,0.12, 0x111111); pupil.position.set(sx, 0.2, -1.18); pupil.name = name; group.add(pupil);
+        const tear = gm(0.06,0.35,0.05, 0x5555cc); tear.position.set(sx, -0.1, -1.16); tear.name = `tear_${name}`; group.add(tear);
+    }
+    // Mouth
+    group.add(gm(0.5, 0.15, 0.1, 0x333333)).position.set(0, -0.35, -1.15);
+    group.add(gm(0.35, 0.08, 0.1, 0x551111)).position.set(0, -0.3, -1.13);
+    // Tentacles - multi-segment
+    for (let tx = -1; tx <= 1; tx++) {
+        for (let tz = -1; tz <= 1; tz++) {
+            const tg = new THREE.Group(); tg.name = `tg${(tx+1)*3+(tz+1)}`;
+            tg.position.set(tx * 0.6, -1.1, tz * 0.6);
+            const segs = 3 + Math.floor(Math.random() * 2);
+            for (let s = 0; s < segs; s++) {
+                const w = 0.2 - s * 0.03;
+                const seg = bm(w, 0.6, w, s === 0 ? 0xcccccc : 0xbbbbbb);
+                seg.position.y = -s * 0.55; seg.name = `ts${s}`;
+                tg.add(seg);
+            }
+            group.add(tg);
+        }
+    }
+    return group;
+}
+
+class Ghast {
+    constructor(x, y, z) {
+        this.type = 'ghast';
+        this.mesh = createGhastMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3((Math.random()-0.5)*0.8, 0, (Math.random()-0.5)*0.8);
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 3 + Math.random() * 4;
+        this.alive = true;
+        this.tamed = false;
+        this.happy = false;
+        this.rider = null;
+        this.fireballCooldown = 0;
+    }
+
+    makeHappy() {
+        this.happy = true;
+        // Replace sad face with happy face
+        // Remove tears
+        for (const n of ['tear_eyeL','tear_eyeR']) {
+            const t = this.mesh.getObjectByName(n);
+            if (t) { t.parent.remove(t); }
+        }
+        // Replace sad eyes with happy ^^ eyes
+        for (const n of ['eyeL','eyeR']) {
+            const old = this.mesh.getObjectByName(n);
+            if (old) {
+                const pos = old.position.clone();
+                old.parent.remove(old);
+                // Happy curved eye (^)
+                const eyeTop = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.25, 0.06, 0.12),
+                    new THREE.MeshBasicMaterial({ color: 0x111111 })
+                );
+                eyeTop.position.copy(pos);
+                eyeTop.position.y += 0.05;
+                eyeTop.name = n;
+                this.mesh.add(eyeTop);
+                const eyeL = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.06, 0.12, 0.12),
+                    new THREE.MeshBasicMaterial({ color: 0x111111 })
+                );
+                eyeL.position.copy(pos);
+                eyeL.position.x -= 0.1;
+                eyeL.position.y -= 0.02;
+                this.mesh.add(eyeL);
+                const eyeR = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.06, 0.12, 0.12),
+                    new THREE.MeshBasicMaterial({ color: 0x111111 })
+                );
+                eyeR.position.copy(pos);
+                eyeR.position.x += 0.1;
+                eyeR.position.y -= 0.02;
+                this.mesh.add(eyeR);
+            }
+        }
+        // Add blush (pink cheeks)
+        const blushMat = new THREE.MeshLambertMaterial({ color: 0xffaaaa, transparent: true, opacity: 0.5 });
+        const blushL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.15, 0.06), blushMat);
+        blushL.position.set(-0.5, -0.05, -1.16);
+        this.mesh.add(blushL);
+        const blushR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.15, 0.06), blushMat);
+        blushR.position.set(0.5, -0.05, -1.16);
+        this.mesh.add(blushR);
+        // Replace sad mouth with smile
+        // Find and remove old mouth meshes at mouth area
+        const toRemove = [];
+        this.mesh.children.forEach(c => {
+            if (c.position && Math.abs(c.position.z + 1.15) < 0.05 && c.position.y < -0.2 && c.position.y > -0.4) {
+                toRemove.push(c);
+            }
+        });
+        toRemove.forEach(c => this.mesh.remove(c));
+        // Smile
+        const smile = new THREE.Mesh(
+            new THREE.BoxGeometry(0.35, 0.08, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0x333333 })
+        );
+        smile.position.set(0, -0.3, -1.15);
+        this.mesh.add(smile);
+        const smileL = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.08, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0x333333 })
+        );
+        smileL.position.set(-0.18, -0.25, -1.15);
+        this.mesh.add(smileL);
+        const smileR = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.08, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0x333333 })
+        );
+        smileR.position.set(0.18, -0.25, -1.15);
+        this.mesh.add(smileR);
+        // Tame indicator
+        const ind = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.3, 0.3),
+            new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+        );
+        ind.position.set(0, 1.4, 0);
+        ind.rotation.set(Math.PI / 4, Math.PI / 4, 0);
+        this.mesh.add(ind);
+        // Make body slightly pink tinted
+        this.mesh.children[0].material = new THREE.MeshLambertMaterial({ color: 0xf0e0e8 });
+    }
+
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Tentacle chain wave
+        for (let i = 0; i < 9; i++) {
+            const tg = this.mesh.getObjectByName(`tg${i}`);
+            if (!tg) continue;
+            tg.rotation.x = Math.sin(this.time * 1.2 + i * 0.8) * 0.12;
+            tg.rotation.z = Math.cos(this.time * 0.9 + i * 1.1) * 0.08;
+            for (let s = 0; s < 5; s++) {
+                const seg = tg.getObjectByName(`ts${s}`);
+                if (seg) seg.rotation.x = Math.sin(this.time * 1.5 + i + s * 0.6) * 0.1 * (s + 1);
+            }
+        }
+
+        if (!this.happy) {
+            for (const n of ['tear_eyeL', 'tear_eyeR']) {
+                const t = this.mesh.getObjectByName(n);
+                if (t) t.position.y = -0.1 + Math.sin(this.time * 2.5) * 0.06;
+            }
+        }
+
+        // Happy Ghast shoots fireballs at nearby Ender Dragon
+        if (this.happy && this.fireballCooldown !== undefined) {
+            this.fireballCooldown -= dt;
+        }
+
+        if (!this.tamed) {
+            // Idle float
+            this.dirChangeTimer -= dt;
+            if (this.dirChangeTimer <= 0) {
+                this.velocity.x = (Math.random()-0.5) * 0.8;
+                this.velocity.z = (Math.random()-0.5) * 0.8;
+                this.velocity.y = (Math.random()-0.5) * 0.3;
+                this.dirChangeTimer = 3 + Math.random() * 4;
+            }
+        }
+
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+        pos.y += Math.sin(this.time * 0.8) * 0.01;
+
+        if (pos.y < 15) this.velocity.y = Math.abs(this.velocity.y) + 0.2;
+        if (pos.y > 45) this.velocity.y = -Math.abs(this.velocity.y) - 0.2;
+
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
+    }
+}
+
+// ============================================================
+// Guardian - Ocean mob, tame with Clione egg -> creates End Portal
+// ============================================================
+
+function createGuardianMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const teal = 0x3a8a7a, dark = 0x2a5a5a, orange = 0xdd6622;
+
+    // Diamond body + inner
+    const body = bm(1.4, 1.0, 1.4, teal); body.rotation.y = Math.PI / 4; group.add(body);
+    const inner = bm(1.0, 0.7, 1.0, 0x4a9a8a); inner.rotation.y = Math.PI / 4; group.add(inner);
+    // Cyclopean eye
+    group.add(bm(0.45, 0.45, 0.08, 0xf0f0f0)).position.set(0, 0.05, -0.75);
+    const iris = gm(0.25, 0.25, 0.1, orange); iris.position.set(0, 0.05, -0.78); iris.name = 'iris'; group.add(iris);
+    const pupil = gm(0.1, 0.18, 0.11, 0x111111); pupil.position.set(0, 0.05, -0.8); pupil.name = 'pupil'; group.add(pupil);
+    // 12 spines
+    const spines = [[0,0.7,0],[0,-0.7,0],[0.8,0,0],[-0.8,0,0],[0,0,0.8],[0,0,-0.8],
+        [0.5,0.4,0.5],[-0.5,0.4,-0.5],[0.5,-0.4,-0.5],[-0.5,-0.4,0.5],[0.5,0.4,-0.5],[-0.5,-0.4,-0.5]];
+    spines.forEach(([sx,sy,sz], i) => {
+        const sp = bm(0.12, 0.35, 0.12, dark); sp.position.set(sx,sy,sz);
+        sp.lookAt(sx*3, sy*3, sz*3); sp.name = `spike${i}`; group.add(sp);
+    });
+    // Two-part tail
+    const tail = bm(0.25, 0.2, 0.6, teal); tail.position.set(0, 0, 1.0); tail.name = 'tail'; group.add(tail);
+    const tailTip = bm(0.4, 0.15, 0.3, dark); tailTip.position.set(0, 0, 1.35); tailTip.name = 'tailTip'; group.add(tailTip);
+    // Beam emitter
+    const beam = gm(0.08, 0.08, 0.08, 0xff8800); beam.position.set(0, -0.2, -0.75); beam.name = 'beam'; group.add(beam);
+    return group;
+}
+
+class Guardian {
+    constructor(x, y, z) {
+        this.type = 'guardian';
+        this.mesh = createGuardianMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3((Math.random()-0.5)*0.6, 0, (Math.random()-0.5)*0.6);
+        this.time = Math.random() * Math.PI * 2;
+        this.dirChangeTimer = 2 + Math.random() * 4;
+        this.alive = true;
+        this.tamed = false;
+    }
+
+    update(dt, world) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Eye tracking
+        const iris = this.mesh.getObjectByName('iris');
+        const pupil = this.mesh.getObjectByName('pupil');
+        if (iris) iris.position.x = Math.sin(this.time * 1.2) * 0.06;
+        if (pupil) pupil.position.x = Math.sin(this.time * 1.2) * 0.06;
+
+        // Spine pulse
+        for (let i = 0; i < 12; i++) {
+            const spike = this.mesh.getObjectByName(`spike${i}`);
+            if (spike) spike.scale.y = 1 + Math.sin(this.time * 2.5 + i * 0.5) * 0.25;
+        }
+        // Two-part tail
+        const tail = this.mesh.getObjectByName('tail');
+        const tailTip = this.mesh.getObjectByName('tailTip');
+        if (tail) tail.rotation.y = Math.sin(this.time * 3) * 0.5;
+        if (tailTip) tailTip.rotation.y = Math.sin(this.time * 3 + 0.5) * 0.6;
+        // Beam pulse
+        const beam = this.mesh.getObjectByName('beam');
+        if (beam) beam.material.opacity = 0.5 + Math.sin(this.time * 4) * 0.5;
+        this.mesh.rotation.x = Math.sin(this.time * 0.5) * 0.05;
+
+        if (!this.tamed) {
+            this.dirChangeTimer -= dt;
+            if (this.dirChangeTimer <= 0) {
+                this.velocity.x = (Math.random()-0.5) * 0.6;
+                this.velocity.z = (Math.random()-0.5) * 0.6;
+                this.velocity.y = (Math.random()-0.5) * 0.2;
+                this.dirChangeTimer = 2 + Math.random() * 4;
+            }
+        }
+
+        const pos = this.mesh.position;
+        pos.x += this.velocity.x * dt;
+        pos.y += this.velocity.y * dt;
+        pos.z += this.velocity.z * dt;
+        pos.y += Math.sin(this.time) * 0.01;
+
+        // Stay in water
+        const bx = Math.floor(pos.x+0.5), by = Math.floor(pos.y+0.5), bz = Math.floor(pos.z+0.5);
+        if (world.getBlock(bx, by, bz) !== BlockType.WATER) {
+            if (world.getBlock(bx, by+1, bz) === BlockType.WATER) this.velocity.y = 0.3;
+            else if (world.getBlock(bx, by-1, bz) === BlockType.WATER) this.velocity.y = -0.3;
+            else { this.velocity.x *= -1; this.velocity.z *= -1; }
+        }
+        if (pos.y < 1) { pos.y = 1; this.velocity.y = 0.2; }
+
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 2;
+        }
+    }
+}
+
+// ============================================================
+// Ender Dragon - Final boss in Ender World
+// ============================================================
+
+function createEnderDragonMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const bk=0x111118, dk=0x0a0a12, pu=0x6622aa, ey=0xcc44ff;
+
+    // Head + brow ridge
+    group.add(bm(1.4,0.9,1.6, bk)).position.set(0,0.5,-2.5);
+    group.add(bm(1.5,0.2,0.6, dk)).position.set(0,0.95,-2.3);
+    group.add(bm(0.9,0.6,1.0, bk)).position.set(0,0.25,-3.3);
+    // Nostrils
+    for (const sx of [-0.2,0.2]) group.add(gm(0.1,0.08,0.08, 0x331155)).position.set(sx,0.45,-3.82);
+    // Eyes
+    for (const sx of [-0.4,0.4]) {
+        group.add(bm(0.3,0.25,0.1, 0x220044)).position.set(sx,0.7,-3.25);
+        group.add(gm(0.22,0.18,0.12, ey)).position.set(sx,0.7,-3.28);
+    }
+    // Jaw with teeth
+    const jawG = new THREE.Group(); jawG.name='jaw'; jawG.position.set(0,0,-3.0);
+    jawG.add(bm(0.8,0.2,0.8, dk));
+    const toothMat = new THREE.MeshLambertMaterial({color:0xddddcc});
+    for (let i=-3;i<=3;i++) {
+        const t = new THREE.Mesh(new THREE.ConeGeometry(0.04,0.12,4), toothMat);
+        t.position.set(i*0.1, 0.12, -0.35); jawG.add(t);
+        const t2 = t.clone(); t2.position.set(i*0.1, -0.05, -0.35); t2.rotation.x=Math.PI; jawG.add(t2);
+    }
+    group.add(jawG);
+    // Curved horns
+    for (const sx of [-0.45,0.45]) {
+        const h1=bm(0.12,0.55,0.15, 0x333340); h1.position.set(sx,1.05,-2.2); h1.rotation.x=-0.4; group.add(h1);
+        const h2=bm(0.08,0.3,0.1, 0x444450); h2.position.set(sx,1.35,-2.0); h2.rotation.x=-0.6; group.add(h2);
+    }
+    // Neck (4 segments)
+    for (let i=0;i<4;i++) { const n=bm(0.8+i*0.15,0.65,0.55,bk); n.position.set(0,0.35-i*0.04,-1.6+i*0.45); n.name=`neck${i}`; group.add(n); }
+    // Body + belly
+    group.add(bm(2.2,1.4,3.2, bk)).position.set(0,0,0.5);
+    group.add(bm(1.6,0.15,2.8, 0x1a1a28)).position.set(0,-0.7,0.5);
+    // Spine ridges
+    for (let i=0;i<8;i++) { const h=0.2+Math.sin(i/7*Math.PI)*0.25; group.add(bm(0.12,h,0.2,pu)).position.set(0,0.75+h/2,-1.5+i*0.55); }
+    // Wings
+    const wingMemb = new THREE.MeshLambertMaterial({color:pu, transparent:true, opacity:0.45, side:THREE.DoubleSide});
+    for (const [sx,name] of [[-1.1,'wingL'],[1.1,'wingR']]) {
+        const wg = new THREE.Group(); wg.name=name; wg.position.set(sx,0.6,0);
+        const dir = sx<0?-1:1;
+        wg.add(bm(2.5,0.15,0.2, dk)).position.set(dir*1.25,0,0);
+        wg.add(bm(2.0,0.1,0.15, dk)).position.set(dir*2.6,-0.15,0.3);
+        const m1=new THREE.Mesh(new THREE.BoxGeometry(2.8,0.04,2.0),wingMemb); m1.position.set(dir*1.5,-0.1,0.5); wg.add(m1);
+        const m2=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.04,1.4),wingMemb); m2.position.set(dir*2.8,-0.2,0.6); wg.add(m2);
+        for (let f=0;f<3;f++) { wg.add(bm(0.06,0.06,1.0+f*0.3,dk)).position.set(dir*(1.0+f*0.7),-0.05,1.2+f*0.15); }
+        group.add(wg);
+    }
+    // Tail (5 seg + spike)
+    for (let i=0;i<5;i++) { const s=0.7-i*0.12; const t=bm(s,s*0.55,0.8,bk); t.position.set(0,-0.1-i*0.08,2.3+i*0.7); t.name=`tail${i}`; group.add(t); }
+    group.add(bm(0.15,0.15,0.4, pu)).position.set(0,-0.5,5.8);
+    // 4 legs with claws
+    for (const [lx,lz,sc] of [[-0.7,0,1],[0.7,0,1],[-0.5,1.8,0.8],[0.5,1.8,0.8]]) {
+        group.add(bm(0.25*sc,0.7*sc,0.25*sc, dk)).position.set(lx,-0.8,lz);
+        group.add(bm(0.2*sc,0.5*sc,0.2*sc, dk)).position.set(lx,-1.25,lz+0.1);
+        for (let c=-1;c<=1;c++) group.add(bm(0.06*sc,0.08*sc,0.15*sc, 0x333340)).position.set(lx+c*0.08*sc,-1.5*sc+0.05,lz-0.05);
+    }
+    return group;
+}
+
+class EnderDragon {
+    constructor(x, y, z) {
+        this.type = 'enderdragon';
+        this.mesh = createEnderDragonMesh();
+        this.mesh.position.set(x, y, z);
+        this.velocity = new THREE.Vector3(1, 0, 0);
+        this.time = Math.random() * Math.PI * 2;
+        this.alive = true;
+        this.hp = 100;
+        this.orbitAngle = 0;
+        this.orbitRadius = 25;
+        this.orbitY = 35;
+        this.orbitCenter = new THREE.Vector3(0, 0, 0);
+    }
+
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Wing flap
+        const wingL = this.mesh.getObjectByName('wingL');
+        const wingR = this.mesh.getObjectByName('wingR');
+        if (wingL) wingL.rotation.z = Math.sin(this.time * 2.5) * 0.5;
+        if (wingR) wingR.rotation.z = -Math.sin(this.time * 2.5) * 0.5;
+
+        // Tail wave
+        for (let i = 0; i < 4; i++) {
+            const tail = this.mesh.getObjectByName(`tail${i}`);
+            if (tail) tail.position.x = Math.sin(this.time * 2 + i * 0.8) * 0.15 * (i + 1);
+        }
+
+        // Neck wave
+        for (let i = 0; i < 3; i++) {
+            const neck = this.mesh.getObjectByName(`neck${i}`);
+            if (neck) neck.position.x = Math.sin(this.time * 1.5 + i * 0.5) * 0.08;
+        }
+
+        // Jaw
+        const jaw = this.mesh.getObjectByName('jaw');
+        if (jaw) jaw.position.y = -0.05 + Math.sin(this.time * 1.2) * 0.05;
+
+        // Orbit flight pattern
+        this.orbitAngle += dt * 0.3;
+        const targetX = this.orbitCenter.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+        const targetZ = this.orbitCenter.z + Math.sin(this.orbitAngle) * this.orbitRadius;
+        const targetY = this.orbitY + Math.sin(this.time * 0.5) * 5;
+
+        const pos = this.mesh.position;
+        pos.x += (targetX - pos.x) * dt * 2;
+        pos.y += (targetY - pos.y) * dt * 2;
+        pos.z += (targetZ - pos.z) * dt * 2;
+
+        // Face flight direction
+        const yaw = this.orbitAngle + Math.PI / 2;
+        this.mesh.rotation.y = yaw;
+        this.mesh.rotation.z = Math.sin(this.orbitAngle) * 0.15;
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp <= 0) {
+            this.alive = false;
+        }
+    }
+}
+
+// ============================================================
+// Fireball - shot by Happy Ghast at Ender Dragon
+// ============================================================
+
+class Fireball {
+    constructor(x, y, z, target) {
+        this.type = 'fireball';
+        this.alive = true;
+        this.tamed = false;
+        this.time = 0;
+        this.mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xff6600 })
+        );
+        // Glow
+        const glow = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.3 })
+        );
+        this.mesh.add(glow);
+        this.mesh.position.set(x, y, z);
+        this.target = target;
+        this.velocity = new THREE.Vector3();
+        this.lifeTime = 5;
+    }
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+        this.lifeTime -= dt;
+        if (this.lifeTime <= 0) { this.alive = false; return; }
+        if (this.target && this.target.alive) {
+            const dir = new THREE.Vector3().subVectors(this.target.mesh.position, this.mesh.position);
+            const dist = dir.length();
+            if (dist > 1.5) {
+                dir.normalize().multiplyScalar(8);
+                this.velocity.lerp(dir, dt * 5);
+            } else {
+                this.target.takeDamage(10);
+                this.alive = false;
+                return;
+            }
+        }
+        this.mesh.position.add(this.velocity.clone().multiplyScalar(dt));
+        this.mesh.rotation.x += dt * 5;
+        this.mesh.rotation.y += dt * 3;
+    }
+}
+
+// ============================================================
+// Dragon Egg - dropped when Ender Dragon dies
+// ============================================================
+
+function createDragonEggMesh() {
+    const group = new THREE.Group();
+    // Egg shape using stacked boxes
+    const eggMat = new THREE.MeshLambertMaterial({ color: 0x1a0a2a });
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), eggMat)).position.y = 0;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.6), eggMat)).position.y = 0.3;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), eggMat)).position.y = 0.6;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.3), eggMat)).position.y = 0.85;
+    // Purple speckles
+    const specMat = new THREE.MeshBasicMaterial({ color: 0x8844cc });
+    for (let i = 0; i < 5; i++) {
+        const spec = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), specMat);
+        spec.position.set((Math.random()-0.5)*0.4, Math.random()*0.7+0.1, (Math.random()-0.5)*0.4);
+        group.add(spec);
+    }
+    return group;
+}
+
+class DragonEgg {
+    constructor(x, y, z) {
+        this.type = 'dragon_egg';
+        this.mesh = createDragonEggMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = false;
+        this.time = 0;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+    }
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+        this.mesh.rotation.y += dt * 0.5;
+        // Float in place with gentle bob
+        this.mesh.position.y += Math.sin(this.time * 2) * 0.005;
+    }
+}
+
+// ============================================================
+// Baby Dragon - hatched from Dragon Egg with Fire
+// ============================================================
+
+function createBabyDragonMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const bk = 0x1a1a25, pu = 0x7733bb, ey = 0xcc55ff;
+
+    // Head - big cute head
+    group.add(bm(0.6, 0.5, 0.6, bk)).position.set(0, 0.5, -0.5);
+    // Big cute eyes
+    for (const sx of [-0.15, 0.15]) {
+        group.add(bm(0.18, 0.18, 0.05, 0x220044)).position.set(sx, 0.6, -0.82);
+        group.add(gm(0.12, 0.14, 0.06, ey)).position.set(sx, 0.6, -0.84);
+    }
+    // Small horns
+    for (const sx of [-0.18, 0.18]) {
+        const h = bm(0.06, 0.2, 0.06, 0x333340);
+        h.position.set(sx, 0.82, -0.45); h.rotation.x = -0.3; group.add(h);
+    }
+    // Snout
+    group.add(bm(0.3, 0.2, 0.2, bk)).position.set(0, 0.4, -0.75);
+    // Nostrils - tiny purple dots
+    for (const sx of [-0.06, 0.06]) group.add(gm(0.04, 0.03, 0.03, pu)).position.set(sx, 0.42, -0.86);
+
+    // Body - small and round
+    group.add(bm(0.5, 0.4, 0.7, bk)).position.set(0, 0.15, 0);
+    // Belly
+    group.add(bm(0.35, 0.08, 0.5, 0x2a2a35)).position.set(0, -0.05, 0);
+    // Spine
+    for (let i = 0; i < 4; i++) {
+        group.add(bm(0.06, 0.1, 0.08, pu)).position.set(0, 0.4, -0.3 + i * 0.25);
+    }
+
+    // Wings - small stubby
+    const wm = new THREE.MeshLambertMaterial({color: pu, transparent: true, opacity: 0.5, side: THREE.DoubleSide});
+    for (const [sx, name] of [[-0.25, 'wingL'], [0.25, 'wingR']]) {
+        const wg = new THREE.Group(); wg.name = name;
+        wg.position.set(sx, 0.3, 0);
+        const dir = sx < 0 ? -1 : 1;
+        wg.add(bm(0.5, 0.06, 0.08, 0x1a1a25)).position.set(dir * 0.25, 0, 0);
+        const mem = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.4), wm);
+        mem.position.set(dir * 0.25, -0.03, 0.1); wg.add(mem);
+        group.add(wg);
+    }
+
+    // Tail
+    for (let i = 0; i < 3; i++) {
+        const s = 0.2 - i * 0.05;
+        const t = bm(s, s * 0.6, 0.25, bk);
+        t.position.set(0, 0.1 - i * 0.03, 0.45 + i * 0.22);
+        t.name = `tail${i}`; group.add(t);
+    }
+    // Tail tip purple
+    group.add(bm(0.06, 0.06, 0.12, pu)).position.set(0, 0.02, 1.1);
+
+    // Legs - tiny
+    for (const [lx, lz] of [[-0.15, -0.1], [0.15, -0.1], [-0.12, 0.2], [0.12, 0.2]]) {
+        group.add(bm(0.1, 0.2, 0.1, 0x1a1a25)).position.set(lx, -0.1, lz);
+    }
+
+    return group;
+}
+
+class BabyDragon {
+    constructor(x, y, z) {
+        this.type = 'babydragon';
+        this.mesh = createBabyDragonMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = true;
+        this.time = Math.random() * Math.PI * 2;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.dirChangeTimer = 2;
+    }
+    update(dt, playerX, playerY, playerZ) {
+        if (!this.alive) return;
+        this.time += dt;
+        // Wing flap
+        const wL = this.mesh.getObjectByName('wingL'), wR = this.mesh.getObjectByName('wingR');
+        if (wL) wL.rotation.z = Math.sin(this.time * 4) * 0.4;
+        if (wR) wR.rotation.z = -Math.sin(this.time * 4) * 0.4;
+        // Tail wag
+        for (let i = 0; i < 3; i++) {
+            const t = this.mesh.getObjectByName(`tail${i}`);
+            if (t) t.position.x = Math.sin(this.time * 3 + i * 0.5) * 0.04 * (i + 1);
+        }
+        // Follow player
+        if (playerX !== undefined) {
+            const dx = playerX - this.mesh.position.x;
+            const dy = playerY + 1 - this.mesh.position.y;
+            const dz = playerZ - this.mesh.position.z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (dist > 3) {
+                const s = 3 / dist;
+                this.velocity.set(dx * s, dy * s, dz * s);
+            } else {
+                this.dirChangeTimer -= dt;
+                if (this.dirChangeTimer <= 0) {
+                    this.velocity.set((Math.random()-0.5)*0.5, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.5);
+                    this.dirChangeTimer = 2 + Math.random() * 2;
+                }
+            }
+        }
+        this.mesh.position.add(this.velocity.clone().multiplyScalar(dt));
+        this.mesh.position.y += Math.sin(this.time * 2) * 0.005;
+        // Face direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 4;
+        }
+    }
+}
+
+// ============================================================
+// Adult Dragon - grown from Baby Dragon, rideable, shoots fireballs
+// ============================================================
+
+function createAdultDragonMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const bk=0x1a1a2a, dk=0x101020, bl=0x3344aa, ey=0x44aaff;
+
+    // Head
+    group.add(bm(1.2,0.8,1.4, bk)).position.set(0,0.5,-2.2);
+    group.add(bm(1.3,0.2,0.5, dk)).position.set(0,0.9,-2.0);
+    group.add(bm(0.8,0.5,0.8, bk)).position.set(0,0.25,-3.0);
+    // Eyes - blue glow
+    for (const sx of [-0.35,0.35]) {
+        group.add(bm(0.25,0.2,0.1, 0x112244)).position.set(sx,0.65,-2.9);
+        group.add(gm(0.18,0.14,0.12, ey)).position.set(sx,0.65,-2.93);
+    }
+    // Horns
+    for (const sx of [-0.4,0.4]) {
+        group.add(bm(0.1,0.5,0.12, 0x333345)).position.set(sx,1.0,-2.0);
+        group.add(bm(0.07,0.25,0.08, 0x444455)).position.set(sx,1.3,-1.85);
+    }
+    // Jaw
+    const jawG = new THREE.Group(); jawG.name = 'jaw'; jawG.position.set(0,0,-2.7);
+    jawG.add(bm(0.7,0.18,0.7, dk));
+    group.add(jawG);
+    // Neck
+    for (let i=0;i<3;i++) { const n=bm(0.7+i*0.12,0.55,0.5,bk); n.position.set(0,0.3-i*0.04,-1.3+i*0.4); n.name=`neck${i}`; group.add(n); }
+    // Body
+    group.add(bm(1.8,1.2,2.8, bk)).position.set(0,0,0.3);
+    group.add(bm(1.3,0.12,2.4, 0x252540)).position.set(0,-0.6,0.3);
+    // Saddle (riding seat)
+    group.add(bm(0.6,0.1,0.8, 0x663322)).position.set(0,0.65,0);
+    group.add(bm(0.7,0.2,0.1, 0x553318)).position.set(0,0.7,-0.35);
+    // Spine
+    for (let i=0;i<7;i++) { group.add(bm(0.1,0.18+Math.sin(i/6*Math.PI)*0.15,0.18, bl)).position.set(0,0.7+Math.sin(i/6*Math.PI)*0.08,-1.2+i*0.5); }
+    // Wings
+    const wm = new THREE.MeshLambertMaterial({color:bl, transparent:true, opacity:0.45, side:THREE.DoubleSide});
+    for (const [sx,name] of [[-1,'wingL'],[1,'wingR']]) {
+        const wg = new THREE.Group(); wg.name=name; wg.position.set(sx,0.5,0);
+        const dir=sx<0?-1:1;
+        wg.add(bm(2.2,0.12,0.18, dk)).position.set(dir*1.1,0,0);
+        wg.add(bm(1.6,0.08,0.12, dk)).position.set(dir*2.2,-0.12,0.2);
+        const m1=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.04,1.6),wm); m1.position.set(dir*1.2,-0.08,0.4); wg.add(m1);
+        const m2=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.04,1.1),wm); m2.position.set(dir*2.4,-0.15,0.5); wg.add(m2);
+        group.add(wg);
+    }
+    // Tail
+    for (let i=0;i<4;i++) { const s=0.6-i*0.12; const t=bm(s,s*0.5,0.7,bk); t.position.set(0,-0.1-i*0.07,1.9+i*0.6); t.name=`tail${i}`; group.add(t); }
+    group.add(bm(0.12,0.12,0.35, bl)).position.set(0,-0.4,4.3);
+    // Legs
+    for (const [lx,lz,sc] of [[-0.6,-0.2,1],[0.6,-0.2,1],[-0.4,1.5,0.8],[0.4,1.5,0.8]]) {
+        group.add(bm(0.22*sc,0.6*sc,0.22*sc, dk)).position.set(lx,-0.75,lz);
+        group.add(bm(0.3*sc,0.08*sc,0.35*sc, dk)).position.set(lx,-1.1*sc,lz-0.05);
+    }
+    return group;
+}
+
+class AdultDragon {
+    constructor(x, y, z) {
+        this.type = 'adultdragon';
+        this.mesh = createAdultDragonMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = true;
+        this.time = Math.random() * Math.PI * 2;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.dirChangeTimer = 2;
+        this.fireballCooldown = 0;
+    }
+    update(dt, playerX, playerY, playerZ) {
+        if (!this.alive) return;
+        this.time += dt;
+        this.fireballCooldown -= dt;
+        // Wing flap
+        const wL = this.mesh.getObjectByName('wingL'), wR = this.mesh.getObjectByName('wingR');
+        if (wL) wL.rotation.z = Math.sin(this.time * 2.5) * 0.5;
+        if (wR) wR.rotation.z = -Math.sin(this.time * 2.5) * 0.5;
+        // Tail
+        for (let i=0;i<4;i++) { const t=this.mesh.getObjectByName(`tail${i}`); if(t) t.position.x=Math.sin(this.time*1.8+i*0.7)*0.1*(i+1); }
+        // Neck
+        for (let i=0;i<3;i++) { const n=this.mesh.getObjectByName(`neck${i}`); if(n) n.position.x=Math.sin(this.time*1.3+i*0.4)*0.05; }
+        // Jaw
+        const jaw=this.mesh.getObjectByName('jaw'); if(jaw) jaw.position.y=Math.max(0,Math.sin(this.time*0.8)*0.08);
+        // Follow player if not being ridden
+        if (playerX !== undefined && !this.rider) {
+            const dx=playerX-this.mesh.position.x, dy=playerY+2-this.mesh.position.y, dz=playerZ-this.mesh.position.z;
+            const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+            if (dist>5) { const s=4/dist; this.velocity.set(dx*s, dy*s, dz*s); }
+            else { this.dirChangeTimer-=dt; if(this.dirChangeTimer<=0) { this.velocity.set((Math.random()-0.5)*0.8,(Math.random()-0.5)*0.2,(Math.random()-0.5)*0.8); this.dirChangeTimer=2+Math.random()*2; } }
+        }
+        if (!this.rider) {
+            this.mesh.position.add(this.velocity.clone().multiplyScalar(dt));
+            this.mesh.position.y += Math.sin(this.time*1.5)*0.008;
+        }
+        if (Math.abs(this.velocity.x)>0.01||Math.abs(this.velocity.z)>0.01) {
+            const yaw=Math.atan2(this.velocity.x,this.velocity.z)+Math.PI;
+            let diff=yaw-this.mesh.rotation.y; if(diff>Math.PI) diff-=Math.PI*2; if(diff<-Math.PI) diff+=Math.PI*2;
+            this.mesh.rotation.y+=diff*dt*3;
+        }
+    }
+}
+
+// ============================================================
+// Leviathan Egg - place water on it to hatch Gargantuan Leviathan
+// ============================================================
+
+function createLeviathanEggMesh() {
+    const group = new THREE.Group();
+    const eggMat = new THREE.MeshLambertMaterial({ color: 0x1a3a4a });
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), eggMat)).position.y = 0;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 1.0), eggMat)).position.y = 0.4;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), eggMat)).position.y = 0.8;
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), eggMat)).position.y = 1.1;
+    // Aqua glow speckles
+    const specMat = new THREE.MeshBasicMaterial({ color: 0x33ddcc });
+    for (let i = 0; i < 8; i++) {
+        const spec = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), specMat);
+        spec.position.set((Math.random()-0.5)*0.7, Math.random()*0.9+0.1, (Math.random()-0.5)*0.7);
+        spec.name = `spec${i}`;
+        group.add(spec);
+    }
+    return group;
+}
+
+class LeviathanEgg {
+    constructor(x, y, z) {
+        this.type = 'leviathan_egg';
+        this.mesh = createLeviathanEggMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = false;
+        this.time = 0;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+    }
+    update(dt) {
+        if (!this.alive) return;
+        this.time += dt;
+        this.mesh.rotation.y += dt * 0.3;
+        this.mesh.position.y += Math.sin(this.time * 1.5) * 0.003;
+        // Speckle pulse
+        for (let i = 0; i < 8; i++) {
+            const s = this.mesh.getObjectByName(`spec${i}`);
+            if (s) s.material.opacity = 0.5 + Math.sin(this.time * 3 + i) * 0.5;
+        }
+    }
+}
+
+// ============================================================
+// Gargantuan Leviathan - colossal sea monster
+// ============================================================
+
+function createLeviathanMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const sm = (r,c) => new THREE.Mesh(new THREE.SphereGeometry(r,8,6), new THREE.MeshLambertMaterial({color:c}));
+
+    const dark = 0x152535, mid = 0x1e3545, light = 0x254555, belly = 0x3a6070, eye = 0x33ffcc;
+
+    // HEAD - massive angular jaw
+    const head = sm(2, dark); head.scale.set(1.5, 0.8, 1.3); head.position.set(0, 0.3, -3); group.add(head);
+    // Armored plates on head
+    group.add(bm(2.5, 0.3, 1.5, mid)).position.set(0, 0.8, -2.5);
+    group.add(bm(2.0, 0.2, 1.0, mid)).position.set(0, 1.0, -2.0);
+    // Brow ridge
+    group.add(bm(3.0, 0.25, 0.5, dark)).position.set(0, 0.7, -3.5);
+
+    // Eyes - 4 glowing teal eyes (2 per side)
+    for (const [sx, sy] of [[-0.9,0.6],[-0.7,0.9],[0.9,0.6],[0.7,0.9]]) {
+        group.add(bm(0.25, 0.2, 0.1, 0x112222)).position.set(sx, sy, -3.8);
+        const e = gm(0.18, 0.15, 0.12, eye);
+        e.position.set(sx, sy, -3.85); e.name = `eye_${sx}_${sy}`; group.add(e);
+    }
+
+    // MOUTH - enormous
+    const upperJaw = bm(2.8, 0.4, 1.5, dark); upperJaw.position.set(0, -0.1, -3.8); group.add(upperJaw);
+    // Lower jaw
+    const ljG = new THREE.Group(); ljG.name = 'lowerJaw'; ljG.position.set(0, -0.6, -3.2);
+    ljG.add(bm(2.5, 0.35, 1.4, mid));
+    // Teeth - massive
+    const toothMat = new THREE.MeshLambertMaterial({color: 0xddddc8});
+    for (let i = -6; i <= 6; i++) {
+        const h = 0.3 + Math.random() * 0.2;
+        const t = new THREE.Mesh(new THREE.ConeGeometry(0.08, h, 4), toothMat);
+        t.position.set(i * 0.18, 0.2 + h/2, -0.5); ljG.add(t);
+    }
+    group.add(ljG);
+    // Upper teeth
+    for (let i = -7; i <= 7; i++) {
+        const h = 0.35 + Math.random() * 0.25;
+        const t = new THREE.Mesh(new THREE.ConeGeometry(0.09, h, 4), toothMat);
+        t.position.set(i * 0.17, -0.15 - h/2, -4.3); t.rotation.x = Math.PI; group.add(t);
+    }
+    // Mouth interior
+    group.add(bm(2.2, 0.6, 1.0, 0x1a0808)).position.set(0, -0.3, -3.3);
+
+    // BODY - massive segmented
+    for (let i = 0; i < 10; i++) {
+        const t = i / 10;
+        const w = 2.5 * (1 - t * 0.5);
+        const h = 1.5 * (1 - t * 0.4);
+        const seg = bm(w, h, 1.0, i % 2 === 0 ? dark : mid);
+        seg.position.set(0, -0.05 * i, i * 0.9);
+        seg.name = `seg${i}`;
+        group.add(seg);
+        // Armored ridge on top
+        if (i < 8) {
+            group.add(bm(0.3, 0.2 + (4-Math.abs(i-4))*0.05, 0.15, light)).position.set(0, h/2 + 0.1 - 0.05*i, i*0.9);
+        }
+    }
+    // Belly lighter
+    for (let i = 0; i < 6; i++) {
+        const bw = 1.2 * (1 - i * 0.1);
+        group.add(bm(bw, 0.1, 0.8, belly)).position.set(0, -0.8 - i*0.03, i*0.9);
+    }
+
+    // FINS - large side fins
+    for (const [sx, name] of [[-1.3,'finL'],[1.3,'finR']]) {
+        const dir = sx < 0 ? -1 : 1;
+        const fg = new THREE.Group(); fg.name = name;
+        fg.position.set(sx, -0.2, -1);
+        fg.add(bm(1.5, 0.1, 1.0, mid)).position.set(dir*0.75, 0, 0);
+        fg.add(bm(0.8, 0.06, 0.6, dark)).position.set(dir*1.3, -0.05, 0.1);
+        group.add(fg);
+    }
+    // Dorsal fin
+    group.add(bm(0.15, 0.8, 1.2, dark)).position.set(0, 1.0, 1);
+
+    // TAIL - long tapered with fin
+    for (let i = 0; i < 5; i++) {
+        const s = 1.0 - i * 0.18;
+        const t = bm(s, s*0.5, 0.8, dark);
+        t.position.set(0, -0.1 - i*0.1, 9 + i*0.75);
+        t.name = `tail${i}`;
+        group.add(t);
+    }
+    // Tail flukes
+    const flukeG = new THREE.Group(); flukeG.name = 'fluke';
+    flukeG.position.set(0, -0.5, 12.8);
+    flukeG.add(bm(2.0, 0.08, 0.6, mid));
+    flukeG.add(bm(1.2, 0.06, 0.4, dark)).position.set(-0.8, 0, 0.15);
+    flukeG.add(bm(1.2, 0.06, 0.4, dark)).position.set(0.8, 0, 0.15);
+    group.add(flukeG);
+
+    // Bioluminescent spots
+    const bioMat = new THREE.MeshBasicMaterial({ color: 0x33ddcc, transparent: true, opacity: 0.6 });
+    for (let i = 0; i < 12; i++) {
+        const spot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), bioMat.clone());
+        spot.position.set((Math.random()-0.5)*2, (Math.random()-0.5)*0.8, i*0.9 - 1);
+        spot.name = `bio${i}`;
+        group.add(spot);
+    }
+
+    return group;
+}
+
+class GargantuanLeviathan {
+    constructor(x, y, z) {
+        this.type = 'leviathan';
+        this.mesh = createLeviathanMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = true; // born tamed (from egg)
+        this.time = Math.random() * Math.PI * 2;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.dirTimer = 3;
+        this.jawOpen = 0;
+    }
+
+    update(dt, playerX, playerY, playerZ) {
+        if (!this.alive) return;
+        this.time += dt;
+
+        // Body wave
+        for (let i = 0; i < 10; i++) {
+            const seg = this.mesh.getObjectByName(`seg${i}`);
+            if (seg) seg.position.x = Math.sin(this.time * 1.2 + i * 0.5) * 0.08 * i;
+        }
+        // Tail wave
+        for (let i = 0; i < 5; i++) {
+            const t = this.mesh.getObjectByName(`tail${i}`);
+            if (t) t.position.x = Math.sin(this.time * 1.5 + i * 0.7) * 0.15 * (i + 1);
+        }
+        const fluke = this.mesh.getObjectByName('fluke');
+        if (fluke) fluke.rotation.y = Math.sin(this.time * 1.5 + 4) * 0.4;
+        // Fin undulation
+        const finL = this.mesh.getObjectByName('finL');
+        const finR = this.mesh.getObjectByName('finR');
+        if (finL) finL.rotation.z = Math.sin(this.time * 1.2) * 0.15;
+        if (finR) finR.rotation.z = -Math.sin(this.time * 1.2) * 0.15;
+        // Jaw
+        const lj = this.mesh.getObjectByName('lowerJaw');
+        if (lj) {
+            this.jawOpen = Math.max(0, Math.sin(this.time * 0.6) * 0.2);
+            lj.position.y = -0.6 - this.jawOpen;
+        }
+        // Bioluminescent pulse
+        for (let i = 0; i < 12; i++) {
+            const b = this.mesh.getObjectByName(`bio${i}`);
+            if (b) b.material.opacity = 0.3 + Math.sin(this.time * 2 + i * 0.8) * 0.3;
+        }
+        // Eye glow pulse
+        this.mesh.children.forEach(c => {
+            if (c.name && c.name.startsWith('eye_')) {
+                c.material.opacity = 0.7 + Math.sin(this.time * 2.5) * 0.3;
+            }
+        });
+
+        // Follow player loosely
+        if (playerX !== undefined) {
+            const dx = playerX - this.mesh.position.x;
+            const dy = playerY - 3 - this.mesh.position.y;
+            const dz = playerZ - this.mesh.position.z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (dist > 20) {
+                const s = 2.5 / dist;
+                this.velocity.set(dx*s, dy*s, dz*s);
+            } else {
+                this.dirTimer -= dt;
+                if (this.dirTimer <= 0) {
+                    this.velocity.set((Math.random()-0.5)*1, (Math.random()-0.5)*0.3, (Math.random()-0.5)*1);
+                    this.dirTimer = 3 + Math.random() * 4;
+                }
+            }
+        }
+
+        const p = this.mesh.position;
+        p.x += this.velocity.x * dt;
+        p.y += this.velocity.y * dt;
+        p.z += this.velocity.z * dt;
+        p.y += Math.sin(this.time * 0.6) * 0.01;
+        if (p.y < 5) this.velocity.y = Math.abs(this.velocity.y) + 0.2;
+        if (p.y > 25) this.velocity.y = -Math.abs(this.velocity.y) - 0.2;
+
+        // Face direction
+        if (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01) {
+            const yaw = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
+            let diff = yaw - this.mesh.rotation.y;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            this.mesh.rotation.y += diff * dt * 1.5;
+        }
+    }
+}
+
+// ============================================================
+// Entity Manager
+// ============================================================
+
+export class EntityManager {
+    constructor(scene, world) {
+        this.scene = scene;
+        this.world = world;
+        this.entities = [];
+        this.spawnCheckTimer = 0;
+        this.bloopSpawnTimer = 0;
+        this.meowlSpawnTimer = 0;
+        this.maxCliones = 12;
+        this.maxBloops = 2;
+        this.maxMeowls = 3;
+        this.maxGhasts = 2;
+        this.maxGuardians = 2;
+        this.ghastSpawnTimer = 5;
+        this.guardianSpawnTimer = 8;
+        this.dragonSpawned = false;
+    }
+
+    spawnClione(x, y, z) {
+        const clione = new Clione(x, y, z);
+        this.entities.push(clione);
+        this.scene.add(clione.mesh);
+        return clione;
+    }
+
+    spawnMaja(x, y, z) {
+        const maja = new ElGranMaja(x, y, z);
+        this.entities.push(maja);
+        this.scene.add(maja.mesh);
+        return maja;
+    }
+
+    spawnWither(x, y, z, scale) {
+        const wither = new Wither(x, y, z, scale);
+        this.entities.push(wither);
+        this.scene.add(wither.mesh);
+        return wither;
+    }
+
+    spawnGhast(x, y, z) {
+        const g = new Ghast(x, y, z);
+        this.entities.push(g);
+        this.scene.add(g.mesh);
+        return g;
+    }
+
+    spawnGuardian(x, y, z) {
+        const g = new Guardian(x, y, z);
+        this.entities.push(g);
+        this.scene.add(g.mesh);
+        return g;
+    }
+
+    spawnEnderDragon(x, y, z) {
+        const d = new EnderDragon(x, y, z);
+        this.entities.push(d);
+        this.scene.add(d.mesh);
+        return d;
+    }
+
+    spawnFireball(x, y, z, target) {
+        const f = new Fireball(x, y, z, target);
+        this.entities.push(f);
+        this.scene.add(f.mesh);
+        return f;
+    }
+
+    spawnDragonEgg(x, y, z) {
+        const e = new DragonEgg(x, y, z);
+        this.entities.push(e);
+        this.scene.add(e.mesh);
+        return e;
+    }
+
+    spawnBabyDragon(x, y, z) {
+        const d = new BabyDragon(x, y, z);
+        this.entities.push(d);
+        this.scene.add(d.mesh);
+        return d;
+    }
+
+    spawnAdultDragon(x, y, z) {
+        const d = new AdultDragon(x, y, z);
+        this.entities.push(d);
+        this.scene.add(d.mesh);
+        return d;
+    }
+
+    spawnLeviathanEgg(x, y, z) {
+        const e = new LeviathanEgg(x, y, z);
+        this.entities.push(e);
+        this.scene.add(e.mesh);
+        return e;
+    }
+
+    spawnLeviathan(x, y, z) {
+        const l = new GargantuanLeviathan(x, y, z);
+        this.entities.push(l);
+        this.scene.add(l.mesh);
+        return l;
+    }
+
+    spawnBloop(x, y, z) {
+        const bloop = new Bloop(x, y, z);
+        this.entities.push(bloop);
+        this.scene.add(bloop.mesh);
+        return bloop;
+    }
+
+    spawnMeowl(x, y, z) {
+        const m = new Meowl(x, y, z);
+        this.entities.push(m);
+        this.scene.add(m.mesh);
+        return m;
+    }
+
+    tryNaturalSpawnClione(playerX, playerZ) {
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'clione' && e.alive) count++;
+        if (count >= this.maxCliones) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 10 + Math.random() * 20;
+        const sx = Math.floor(playerX + Math.cos(angle) * dist);
+        const sz = Math.floor(playerZ + Math.sin(angle) * dist);
+
+        for (let y = 10; y <= 20; y++) {
+            if (this.world.getBlock(sx, y, sz) === BlockType.WATER) {
+                this.spawnClione(sx, y, sz);
+                return;
+            }
+        }
+    }
+
+    tryNaturalSpawnBloop(playerX, playerZ) {
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'bloop' && e.alive) count++;
+        if (count >= this.maxBloops) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 15 + Math.random() * 20;
+        const sx = Math.floor(playerX + Math.cos(angle) * dist);
+        const sz = Math.floor(playerZ + Math.sin(angle) * dist);
+
+        for (let y = 8; y <= 18; y++) {
+            if (this.world.getBlock(sx, y, sz) === BlockType.WATER) {
+                this.spawnBloop(sx, y, sz);
+                return;
+            }
+        }
+    }
+
+    tryNaturalSpawnMeowl(playerX, playerZ) {
+        let count = 0;
+        for (const e of this.entities) if (e.type === 'meowl' && e.alive) count++;
+        if (count >= this.maxMeowls) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 15 + Math.random() * 20;
+        const sx = playerX + Math.cos(angle) * dist;
+        const sz = playerZ + Math.sin(angle) * dist;
+        const sy = 30 + Math.random() * 15;
+
+        const meowl = new Meowl(sx, sy, sz);
+        this.entities.push(meowl);
+        this.scene.add(meowl.mesh);
+    }
+
+    update(dt, playerX, playerY, playerZ, dimension) {
+        // Dimension-specific spawning
+        if (dimension === 'overworld') {
+            this.spawnCheckTimer -= dt;
+            if (this.spawnCheckTimer <= 0) { this.tryNaturalSpawnClione(playerX, playerZ); this.spawnCheckTimer = 2; }
+            this.meowlSpawnTimer -= dt;
+            if (this.meowlSpawnTimer <= 0) { this.tryNaturalSpawnMeowl(playerX, playerZ); this.meowlSpawnTimer = 6 + Math.random() * 6; }
+            this.bloopSpawnTimer -= dt;
+            if (this.bloopSpawnTimer <= 0) { this.tryNaturalSpawnBloop(playerX, playerZ); this.bloopSpawnTimer = 10 + Math.random() * 10; }
+            // Guardian in water
+            this.guardianSpawnTimer -= dt;
+            if (this.guardianSpawnTimer <= 0) {
+                let gc = 0; for (const e of this.entities) if (e.type === 'guardian' && e.alive) gc++;
+                if (gc < this.maxGuardians) {
+                    const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 20;
+                    const sx = Math.floor(playerX + Math.cos(a) * d), sz = Math.floor(playerZ + Math.sin(a) * d);
+                    for (let y = 10; y <= 18; y++) {
+                        if (this.world.getBlock(sx, y, sz) === BlockType.WATER) { this.spawnGuardian(sx, y, sz); break; }
+                    }
+                }
+                this.guardianSpawnTimer = 12 + Math.random() * 10;
+            }
+        } else if (dimension === 'nether') {
+            // Ghast spawning in nether
+            this.ghastSpawnTimer -= dt;
+            if (this.ghastSpawnTimer <= 0) {
+                let gc = 0; for (const e of this.entities) if (e.type === 'ghast' && e.alive) gc++;
+                if (gc < this.maxGhasts) {
+                    const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 20;
+                    const sx = playerX + Math.cos(a) * d, sz = playerZ + Math.sin(a) * d;
+                    this.spawnGhast(sx, 25 + Math.random() * 15, sz);
+                }
+                this.ghastSpawnTimer = 8 + Math.random() * 8;
+            }
+        } else if (dimension === 'ender') {
+            // Ender Dragon - one per visit
+            if (!this.dragonSpawned) {
+                this.spawnEnderDragon(playerX, 35, playerZ);
+                this.dragonSpawned = true;
+            }
+        }
+
+        const cliones = [];
+        const majas = [];
+        for (let i = 0; i < this.entities.length; i++) {
+            const e = this.entities[i];
+            if (!e.alive) continue;
+            if (e.type === 'clione') cliones.push(e);
+            else if (e.type === 'maja') majas.push(e);
+        }
+
+        // Clean dead
+        let writeIdx = 0;
+        for (let i = 0; i < this.entities.length; i++) {
+            const entity = this.entities[i];
+            if (!entity.alive) { this.scene.remove(entity.mesh); continue; }
+            this.entities[writeIdx++] = entity;
+        }
+        this.entities.length = writeIdx;
+
+        // Update
+        for (let i = this.entities.length - 1; i >= 0; i--) {
+            const entity = this.entities[i];
+
+            if (entity.type === 'maja') entity.update(dt, this.world, cliones);
+            else if (entity.type === 'bloop') entity.update(dt, this.world, cliones, majas);
+            else if (entity.type === 'wither') entity.update(dt, this.world, this.entities, playerX, playerY, playerZ);
+            else if (entity.type === 'ghast') {
+                entity.update(dt);
+                // Happy Ghast shoots fireballs at Ender Dragon
+                if (entity.happy && entity.fireballCooldown <= 0) {
+                    for (const t of this.entities) {
+                        if (t.type !== 'enderdragon' || !t.alive) continue;
+                        const d = new THREE.Vector3().subVectors(t.mesh.position, entity.mesh.position);
+                        if (d.length() < 30) {
+                            const p = entity.mesh.position;
+                            this.spawnFireball(p.x, p.y, p.z, t);
+                            entity.fireballCooldown = 2;
+                            break;
+                        }
+                    }
+                }
+            }
+            else if (entity.type === 'guardian') entity.update(dt, this.world);
+            else if (entity.type === 'enderdragon') {
+                entity.update(dt);
+                // Drop egg on death
+                if (!entity.alive && !entity._eggDropped) {
+                    entity._eggDropped = true;
+                    this.spawnDragonEgg(entity.mesh.position.x, entity.mesh.position.y, entity.mesh.position.z);
+                }
+            }
+            else if (entity.type === 'fireball') entity.update(dt);
+            else if (entity.type === 'dragon_egg') entity.update(dt);
+            else if (entity.type === 'leviathan_egg') entity.update(dt);
+            else if (entity.type === 'babydragon') entity.update(dt, playerX, playerY, playerZ);
+            else if (entity.type === 'adultdragon') entity.update(dt, playerX, playerY, playerZ);
+            else if (entity.type === 'leviathan') entity.update(dt, playerX, playerY, playerZ);
+            else if (entity.type === 'meowl') entity.update(dt);
+            else entity.update(dt, this.world);
+
+            const dx = entity.mesh.position.x - playerX;
+            const dz = entity.mesh.position.z - playerZ;
+            if (entity.type === 'enderdragon' || entity.type === 'dragon_egg' || entity.type === 'babydragon' || entity.type === 'adultdragon' || entity.type === 'leviathan_egg' || entity.type === 'leviathan') continue;
+            if (entity.tamed) continue;
+            const maxD = (entity.type === 'wither' || entity.type === 'ghast') ? 120 : (entity.type === 'maja' || entity.type === 'bloop' || entity.type === 'guardian') ? 80 : (entity.type === 'meowl' ? 80 : 50);
+            if (dx * dx + dz * dz > maxD * maxD) {
+                this.scene.remove(entity.mesh);
+                this.entities[i] = this.entities[this.entities.length - 1];
+                this.entities.pop();
+            }
+        }
+    }
+}

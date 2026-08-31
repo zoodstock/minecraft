@@ -1,0 +1,401 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow: hidden;
+    background: #000;
+    font-family: 'Courier New', monospace;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#game-canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Crosshair */
+#crosshair {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 10;
+}
+#crosshair::before, #crosshair::after {
+    content: '';
+    position: absolute;
+    background: white;
+    mix-blend-mode: difference;
+}
+#crosshair::before {
+    width: 2px;
+    height: 20px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+#crosshair::after {
+    width: 20px;
+    height: 2px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Command button bar */
+#cmd-bar {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    z-index: 15;
+    max-width: 50vw;
+    justify-content: flex-end;
+}
+.cmd-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.55);
+    color: #ccc;
+    border: 1px solid #555;
+    border-radius: 3px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.cmd-btn:hover, .cmd-btn:active {
+    background: rgba(60, 60, 60, 0.7);
+    color: #fff;
+}
+.cmd-red {
+    color: #ff6666;
+    border-color: #884444;
+}
+.cmd-red:hover, .cmd-red:active {
+    background: rgba(80, 20, 20, 0.7);
+}
+
+/* Chat / Command input */
+#chat-input {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 350px;
+    max-width: 90vw;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px;
+    z-index: 50;
+    outline: none;
+}
+#chat-msg {
+    position: fixed;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 14px;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    z-index: 50;
+    white-space: nowrap;
+}
+
+/* HUD */
+#hud {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 2px;
+    z-index: 10;
+    max-width: 98vw;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.hotbar-slot {
+    width: 32px;
+    height: 32px;
+    min-width: 26px;
+    border: 2px solid #555;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-radius: 4px;
+}
+.hotbar-slot.selected {
+    border-color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+}
+.hotbar-slot .block-preview {
+    width: 22px;
+    height: 22px;
+    border-radius: 2px;
+}
+.hotbar-slot .slot-num {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 10px;
+    color: #aaa;
+}
+
+/* Info panel */
+#info {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-size: 13px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 8px 12px;
+    border-radius: 4px;
+    z-index: 10;
+    line-height: 1.6;
+}
+
+/* Start screen */
+#start-screen {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    color: white;
+}
+#start-screen h1 {
+    font-size: 48px;
+    margin-bottom: 10px;
+    color: #6a6;
+    text-shadow: 3px 3px 0 #333;
+    letter-spacing: 4px;
+}
+#start-screen p {
+    font-size: 16px;
+    color: #aaa;
+    margin-bottom: 30px;
+}
+#start-screen .start-btn {
+    padding: 15px 40px;
+    font-size: 20px;
+    background: #4a4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+#start-screen .start-btn:hover {
+    background: #5b5;
+}
+#start-screen .controls-info {
+    margin-top: 30px;
+    font-size: 13px;
+    color: #888;
+    text-align: center;
+    line-height: 1.8;
+}
+
+/* Multiplayer UI */
+.mp-section {
+    margin: 8px 0;
+}
+.mp-btn {
+    font-size: 16px !important;
+    padding: 10px 25px !important;
+    background: #555 !important;
+}
+.mp-btn:hover {
+    background: #666 !important;
+}
+.room-code-label {
+    font-size: 13px;
+    color: #aaa;
+    margin-top: 8px;
+}
+.room-code {
+    font-size: 22px;
+    color: #4f4;
+    font-weight: bold;
+    letter-spacing: 3px;
+    margin: 5px 0;
+    user-select: all;
+}
+.copy-btn {
+    padding: 5px 15px;
+    font-size: 13px;
+    background: #666;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+}
+.code-input {
+    padding: 8px 12px;
+    font-size: 16px;
+    font-family: inherit;
+    background: #333;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    text-align: center;
+    width: 180px;
+    letter-spacing: 2px;
+}
+#host-status, #join-status {
+    font-size: 13px;
+    color: #aaa;
+    margin-top: 5px;
+}
+
+/* Selected block name */
+#selected-block {
+    position: fixed;
+    bottom: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 14px;
+    z-index: 10;
+    text-shadow: 1px 1px 2px #000;
+}
+
+/* Mobile joysticks */
+.joystick-container {
+    position: fixed;
+    bottom: 100px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    z-index: 20;
+    display: none;
+    touch-action: none;
+}
+#joystick-move {
+    left: 30px;
+}
+#joystick-look {
+    right: 30px;
+}
+.joystick-inner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.35);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+}
+.joystick-label {
+    position: absolute;
+    bottom: -20px;
+    width: 100%;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+}
+
+/* Mobile action buttons */
+.mobile-buttons {
+    position: fixed;
+    right: 20px;
+    bottom: 240px;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 20;
+}
+.action-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-size: 11px;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+}
+.action-btn:active {
+    background: rgba(255, 255, 255, 0.35);
+}
+#btn-jump {
+    position: fixed;
+    left: 40px;
+    bottom: 240px;
+    display: none;
+    z-index: 20;
+}
+#btn-fire {
+    position: fixed;
+    right: 20px;
+    bottom: 310px;
+    z-index: 20;
+    background: rgba(255, 80, 0, 0.4);
+    border-color: rgba(255, 120, 0, 0.6);
+    color: #ff8800;
+    font-weight: bold;
+}
+
+/* Show mobile controls on touch devices */
+@media (pointer: coarse) {
+    .joystick-container {
+        display: block !important;
+    }
+    .mobile-buttons {
+        display: flex !important;
+    }
+    #btn-jump {
+        display: flex !important;
+    }
+    #crosshair {
+        display: none;
+    }
+    #info {
+        font-size: 11px;
+        top: 5px;
+        left: 5px;
+        padding: 5px 8px;
+    }
+    #hud {
+        bottom: 8px;
+    }
+    .hotbar-slot {
+        width: 28px;
+        height: 28px;
+        min-width: 22px;
+    }
+    .hotbar-slot .block-preview {
+        width: 18px;
+        height: 18px;
+    }
+}
