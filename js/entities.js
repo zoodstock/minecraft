@@ -1818,6 +1818,111 @@ class BabyDragon {
 }
 
 // ============================================================
+// Adult Dragon - grown from Baby Dragon, rideable, shoots fireballs
+// ============================================================
+
+function createAdultDragonMesh() {
+    const group = new THREE.Group();
+    const bm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
+    const gm = (w,h,d,c) => new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c}));
+    const bk=0x1a1a2a, dk=0x101020, bl=0x3344aa, ey=0x44aaff;
+
+    // Head
+    group.add(bm(1.2,0.8,1.4, bk)).position.set(0,0.5,-2.2);
+    group.add(bm(1.3,0.2,0.5, dk)).position.set(0,0.9,-2.0);
+    group.add(bm(0.8,0.5,0.8, bk)).position.set(0,0.25,-3.0);
+    // Eyes - blue glow
+    for (const sx of [-0.35,0.35]) {
+        group.add(bm(0.25,0.2,0.1, 0x112244)).position.set(sx,0.65,-2.9);
+        group.add(gm(0.18,0.14,0.12, ey)).position.set(sx,0.65,-2.93);
+    }
+    // Horns
+    for (const sx of [-0.4,0.4]) {
+        group.add(bm(0.1,0.5,0.12, 0x333345)).position.set(sx,1.0,-2.0);
+        group.add(bm(0.07,0.25,0.08, 0x444455)).position.set(sx,1.3,-1.85);
+    }
+    // Jaw
+    const jawG = new THREE.Group(); jawG.name = 'jaw'; jawG.position.set(0,0,-2.7);
+    jawG.add(bm(0.7,0.18,0.7, dk));
+    group.add(jawG);
+    // Neck
+    for (let i=0;i<3;i++) { const n=bm(0.7+i*0.12,0.55,0.5,bk); n.position.set(0,0.3-i*0.04,-1.3+i*0.4); n.name=`neck${i}`; group.add(n); }
+    // Body
+    group.add(bm(1.8,1.2,2.8, bk)).position.set(0,0,0.3);
+    group.add(bm(1.3,0.12,2.4, 0x252540)).position.set(0,-0.6,0.3);
+    // Saddle (riding seat)
+    group.add(bm(0.6,0.1,0.8, 0x663322)).position.set(0,0.65,0);
+    group.add(bm(0.7,0.2,0.1, 0x553318)).position.set(0,0.7,-0.35);
+    // Spine
+    for (let i=0;i<7;i++) { group.add(bm(0.1,0.18+Math.sin(i/6*Math.PI)*0.15,0.18, bl)).position.set(0,0.7+Math.sin(i/6*Math.PI)*0.08,-1.2+i*0.5); }
+    // Wings
+    const wm = new THREE.MeshLambertMaterial({color:bl, transparent:true, opacity:0.45, side:THREE.DoubleSide});
+    for (const [sx,name] of [[-1,'wingL'],[1,'wingR']]) {
+        const wg = new THREE.Group(); wg.name=name; wg.position.set(sx,0.5,0);
+        const dir=sx<0?-1:1;
+        wg.add(bm(2.2,0.12,0.18, dk)).position.set(dir*1.1,0,0);
+        wg.add(bm(1.6,0.08,0.12, dk)).position.set(dir*2.2,-0.12,0.2);
+        const m1=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.04,1.6),wm); m1.position.set(dir*1.2,-0.08,0.4); wg.add(m1);
+        const m2=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.04,1.1),wm); m2.position.set(dir*2.4,-0.15,0.5); wg.add(m2);
+        group.add(wg);
+    }
+    // Tail
+    for (let i=0;i<4;i++) { const s=0.6-i*0.12; const t=bm(s,s*0.5,0.7,bk); t.position.set(0,-0.1-i*0.07,1.9+i*0.6); t.name=`tail${i}`; group.add(t); }
+    group.add(bm(0.12,0.12,0.35, bl)).position.set(0,-0.4,4.3);
+    // Legs
+    for (const [lx,lz,sc] of [[-0.6,-0.2,1],[0.6,-0.2,1],[-0.4,1.5,0.8],[0.4,1.5,0.8]]) {
+        group.add(bm(0.22*sc,0.6*sc,0.22*sc, dk)).position.set(lx,-0.75,lz);
+        group.add(bm(0.3*sc,0.08*sc,0.35*sc, dk)).position.set(lx,-1.1*sc,lz-0.05);
+    }
+    return group;
+}
+
+class AdultDragon {
+    constructor(x, y, z) {
+        this.type = 'adultdragon';
+        this.mesh = createAdultDragonMesh();
+        this.mesh.position.set(x, y, z);
+        this.alive = true;
+        this.tamed = true;
+        this.time = Math.random() * Math.PI * 2;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.dirChangeTimer = 2;
+        this.fireballCooldown = 0;
+    }
+    update(dt, playerX, playerY, playerZ) {
+        if (!this.alive) return;
+        this.time += dt;
+        this.fireballCooldown -= dt;
+        // Wing flap
+        const wL = this.mesh.getObjectByName('wingL'), wR = this.mesh.getObjectByName('wingR');
+        if (wL) wL.rotation.z = Math.sin(this.time * 2.5) * 0.5;
+        if (wR) wR.rotation.z = -Math.sin(this.time * 2.5) * 0.5;
+        // Tail
+        for (let i=0;i<4;i++) { const t=this.mesh.getObjectByName(`tail${i}`); if(t) t.position.x=Math.sin(this.time*1.8+i*0.7)*0.1*(i+1); }
+        // Neck
+        for (let i=0;i<3;i++) { const n=this.mesh.getObjectByName(`neck${i}`); if(n) n.position.x=Math.sin(this.time*1.3+i*0.4)*0.05; }
+        // Jaw
+        const jaw=this.mesh.getObjectByName('jaw'); if(jaw) jaw.position.y=Math.max(0,Math.sin(this.time*0.8)*0.08);
+        // Follow player if not being ridden
+        if (playerX !== undefined && !this.rider) {
+            const dx=playerX-this.mesh.position.x, dy=playerY+2-this.mesh.position.y, dz=playerZ-this.mesh.position.z;
+            const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+            if (dist>5) { const s=4/dist; this.velocity.set(dx*s, dy*s, dz*s); }
+            else { this.dirChangeTimer-=dt; if(this.dirChangeTimer<=0) { this.velocity.set((Math.random()-0.5)*0.8,(Math.random()-0.5)*0.2,(Math.random()-0.5)*0.8); this.dirChangeTimer=2+Math.random()*2; } }
+        }
+        if (!this.rider) {
+            this.mesh.position.add(this.velocity.clone().multiplyScalar(dt));
+            this.mesh.position.y += Math.sin(this.time*1.5)*0.008;
+        }
+        if (Math.abs(this.velocity.x)>0.01||Math.abs(this.velocity.z)>0.01) {
+            const yaw=Math.atan2(this.velocity.x,this.velocity.z)+Math.PI;
+            let diff=yaw-this.mesh.rotation.y; if(diff>Math.PI) diff-=Math.PI*2; if(diff<-Math.PI) diff+=Math.PI*2;
+            this.mesh.rotation.y+=diff*dt*3;
+        }
+    }
+}
+
+// ============================================================
 // Leviathan Egg - place water on it to hatch Gargantuan Leviathan
 // ============================================================
 
@@ -2145,6 +2250,13 @@ export class EntityManager {
         return d;
     }
 
+    spawnAdultDragon(x, y, z) {
+        const d = new AdultDragon(x, y, z);
+        this.entities.push(d);
+        this.scene.add(d.mesh);
+        return d;
+    }
+
     spawnLeviathanEgg(x, y, z) {
         const e = new LeviathanEgg(x, y, z);
         this.entities.push(e);
@@ -2321,13 +2433,14 @@ export class EntityManager {
             else if (entity.type === 'dragon_egg') entity.update(dt);
             else if (entity.type === 'leviathan_egg') entity.update(dt);
             else if (entity.type === 'babydragon') entity.update(dt, playerX, playerY, playerZ);
+            else if (entity.type === 'adultdragon') entity.update(dt, playerX, playerY, playerZ);
             else if (entity.type === 'leviathan') entity.update(dt, playerX, playerY, playerZ);
             else if (entity.type === 'meowl') entity.update(dt);
             else entity.update(dt, this.world);
 
             const dx = entity.mesh.position.x - playerX;
             const dz = entity.mesh.position.z - playerZ;
-            if (entity.type === 'enderdragon' || entity.type === 'dragon_egg' || entity.type === 'babydragon' || entity.type === 'leviathan_egg' || entity.type === 'leviathan') continue;
+            if (entity.type === 'enderdragon' || entity.type === 'dragon_egg' || entity.type === 'babydragon' || entity.type === 'adultdragon' || entity.type === 'leviathan_egg' || entity.type === 'leviathan') continue;
             if (entity.tamed) continue;
             const maxD = (entity.type === 'wither' || entity.type === 'ghast') ? 120 : (entity.type === 'maja' || entity.type === 'bloop' || entity.type === 'guardian') ? 80 : (entity.type === 'meowl' ? 80 : 50);
             if (dx * dx + dz * dz > maxD * maxD) {

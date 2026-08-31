@@ -355,6 +355,16 @@ body {
     display: none;
     z-index: 20;
 }
+#btn-fire {
+    position: fixed;
+    right: 20px;
+    bottom: 310px;
+    z-index: 20;
+    background: rgba(255, 80, 0, 0.4);
+    border-color: rgba(255, 120, 0, 0.6);
+    color: #ff8800;
+    font-weight: bold;
+}
 
 /* Show mobile controls on touch devices */
 @media (pointer: coarse) {

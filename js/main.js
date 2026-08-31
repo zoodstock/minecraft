@@ -260,6 +260,7 @@ let frameCount = 0, lastFpsTime = 0;
 // ---- 블록 상호작용 쿨다운 ----
 let interactCooldown = 0;
 let ridingGhast = null;
+let ridingDragon = null;
 
 // ---- 포탈 / 차원 전환 ----
 let portalCooldown = 0;
@@ -315,6 +316,7 @@ function switchDimension(target) {
     world.update(0, 0);
     portalCooldown = 3;
     ridingGhast = null;
+    ridingDragon = null;
     entityManager.dragonSpawned = false;
 
     // AI 플레이어 재생성
@@ -387,6 +389,33 @@ function gameLoop(time) {
         player.velocity.set(0, 0, 0);
     } else {
         ridingGhast = null;
+    }
+
+    // 성체 드래곤 탑승 조종
+    if (ridingDragon && ridingDragon.alive && ridingDragon.tamed) {
+        const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+        const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+        const moveDir = new THREE.Vector3(0, 0, 0);
+        if (inputState.forward) moveDir.add(forward);
+        if (inputState.backward) moveDir.sub(forward);
+        if (inputState.left) moveDir.sub(right);
+        if (inputState.right) moveDir.add(right);
+        if (inputState.joystickX || inputState.joystickY) {
+            moveDir.add(forward.clone().multiplyScalar(-inputState.joystickY));
+            moveDir.add(right.clone().multiplyScalar(inputState.joystickX));
+        }
+        if (moveDir.length() > 0) moveDir.normalize();
+        const ds = 6;
+        ridingDragon.velocity.x = moveDir.x * ds;
+        ridingDragon.velocity.z = moveDir.z * ds;
+        ridingDragon.velocity.y = inputState.jump ? 4 : (inputState.descend ? -4 : 0);
+        ridingDragon.mesh.position.add(ridingDragon.velocity.clone().multiplyScalar(dt));
+        player.position.copy(ridingDragon.mesh.position);
+        player.position.y += 2;
+        player.velocity.set(0, 0, 0);
+    } else {
+        if (ridingDragon) { ridingDragon.rider = false; }
+        ridingDragon = null;
     }
 
     world.update(player.position.x, player.position.z);
@@ -469,6 +498,20 @@ function gameLoop(time) {
                 const p = nearEntity.mesh.position;
                 entityManager.spawnBabyDragon(p.x, p.y + 1, p.z);
                 nearEntity.alive = false;
+                interactCooldown = 0.5; handled = true;
+            }
+            // 불로 아기 드래곤 -> 성체 드래곤
+            if (!handled && currentItem === ITEM_FIRE && nearEntity && nearEntity.type === 'babydragon') {
+                const p = nearEntity.mesh.position;
+                entityManager.spawnAdultDragon(p.x, p.y + 1, p.z);
+                nearEntity.alive = false;
+                interactCooldown = 0.5; handled = true;
+            }
+            // 성체 드래곤 타기/내리기
+            if (!handled && nearEntity && nearEntity.type === 'adultdragon') {
+                ridingDragon = ridingDragon === nearEntity ? null : nearEntity;
+                if (ridingDragon) ridingDragon.rider = true;
+                else nearEntity.rider = false;
                 interactCooldown = 0.5; handled = true;
             }
             // 물로 래비아탄 알 부화 -> 가르강튀안 래비아탄
@@ -575,6 +618,25 @@ function gameLoop(time) {
         document.getElementById('player-count').textContent = `접속: ${mp.getPlayerCount()}명`;
     }
 
+    // 드래곤 탑승 시 화염 버튼 표시 + 화염 발사
+    const fireBtnEl = document.getElementById('btn-fire');
+    if (ridingDragon) {
+        fireBtnEl.style.display = 'flex';
+        if (firePressed && ridingDragon.fireballCooldown <= 0) {
+            const dir = player.getDirection();
+            const p = ridingDragon.mesh.position;
+            entityManager.spawnFireball(p.x + dir.x * 2, p.y + dir.y * 2, p.z + dir.z * 2, null);
+            // Set fireball velocity in look direction
+            const fb = entityManager.entities[entityManager.entities.length - 1];
+            fb.velocity = dir.clone().multiplyScalar(12);
+            fb.target = null;
+            ridingDragon.fireballCooldown = 0.5;
+        }
+    } else {
+        fireBtnEl.style.display = 'none';
+    }
+    firePressed = false;
+
     renderer.render(scene, camera);
 }
 
@@ -637,6 +699,17 @@ document.getElementById('join-btn').addEventListener('click', async () => {
     }
 });
 
+// ---- 드래곤 화염 발사 ----
+let firePressed = false;
+const fireBtn = document.getElementById('btn-fire');
+if (fireBtn) {
+    fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); firePressed = true; }, { passive: false });
+    fireBtn.addEventListener('click', () => { firePressed = true; });
+}
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyF' && ridingDragon && !chatOpen) { firePressed = true; }
+});
+
 // ---- 명령어 시스템 ----
 const chatInput = document.getElementById('chat-input');
 const chatMsg = document.getElementById('chat-msg');
@@ -647,6 +720,7 @@ const MOB_LIST = {
     'meowl': '미아울', 'wither': '위더', 'ghast': '가스트',
     'guardian': '가디언', 'enderdragon': '엔더드래곤',
     'dragon_egg': '드래곤 알', 'babydragon': '아기 드래곤',
+    'adultdragon': '성체 드래곤',
     'leviathan_egg': '래비아탄 알', 'leviathan': '가르강튀안 래비아탄',
 };
 
@@ -724,6 +798,7 @@ function executeCommand(cmd) {
             enderdragon: () => entityManager.spawnEnderDragon(sx, sy + 10, sz),
             dragon_egg: () => entityManager.spawnDragonEgg(sx, sy + 1, sz),
             babydragon: () => entityManager.spawnBabyDragon(sx, sy + 1, sz),
+            adultdragon: () => entityManager.spawnAdultDragon(sx, sy + 2, sz),
             leviathan_egg: () => entityManager.spawnLeviathanEgg(sx, sy + 1, sz),
             leviathan: () => entityManager.spawnLeviathan(sx, sy, sz),
         };
